@@ -8,7 +8,9 @@
  *   Pon VITE_API_URL=https://tu-backend.onrender.com en el .env del frontend.
  */
 
-const BASE_URL = "/api";
+const BASE_URL = import.meta.env.VITE_API_URL
+  ? `${import.meta.env.VITE_API_URL.replace(/\/$/, "")}/api`
+  : "/api";
 const USE_MOCK = false; // ← ponlo en true para desconectarte del backend
 
 // ─── Utilidad base ─────────────────────────────────────────────────────────────
@@ -83,6 +85,7 @@ export interface Produccion {
   fecha_inicio: string;
   fecha_fin?: string;
   operario?: string;
+  observaciones?: string;
 }
 
 export interface Prediccion {
