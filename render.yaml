@@ -1,0 +1,16 @@
+services:
+  - name: cortinasys-backend
+    type: web_service
+    env: python
+    branch: main
+    buildCommand: cd backend && pip install -r requirements.txt
+    startCommand: cd backend && uvicorn main:app --host 0.0.0.0 --port $PORT
+    autoDeploy: true
+    envVars:
+      - key: ALLOWED_ORIGINS
+        value: "https://tu-app.vercel.app,http://localhost:5173,http://localhost:3000"
+
+# Si quieres usar una base de datos de Render, crea un servicio de base de datos
+# en el panel de Render y asigna su URL a DATABASE_URL en las variables de entorno.
+# Ejemplo:
+# DATABASE_URL=postgresql://user:pass@host:5432/cortinasys

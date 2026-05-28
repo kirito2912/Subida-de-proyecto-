@@ -73,6 +73,7 @@ Documentación interactiva: http://localhost:8000/docs
 1. Sube la carpeta `backend/` a GitHub
 2. En [render.com](https://render.com) → **New Web Service**
 3. Conecta tu repositorio
+   - Si usas este repositorio monorepo, Render aceptará la configuración de `render.yaml` en la raíz.
 4. Configura:
    - **Runtime:** Python 3
    - **Build Command:** `pip install -r requirements.txt`
