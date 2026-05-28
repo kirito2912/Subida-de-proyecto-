@@ -1,5 +1,18 @@
-// @ts-ignore: Import built server output from the Vite SSR build.
-import server from "../dist/server/server.js";
+import { pathToFileURL } from "url";
+import * as path from "path";
+
+const serverDistPath = path.resolve(process.cwd(), "dist/server/server.js");
+const serverDistUrl = pathToFileURL(serverDistPath).href;
+
+async function getServer() {
+  try {
+    const imported = await import(serverDistUrl);
+    return (imported as { default?: any }).default ?? imported;
+  } catch (error) {
+    console.error("Failed to import SSR server from:", serverDistPath, error);
+    throw error;
+  }
+}
 
 function nodeHeadersToFetchHeaders(headers: Record<string, string | string[] | undefined>) {
   const fetchHeaders = new Headers();
@@ -20,6 +33,8 @@ function nodeHeadersToFetchHeaders(headers: Record<string, string | string[] | u
 
 export default async function handler(req: any, res: any) {
   try {
+    const server = await getServer();
+
     const protocol = req.headers["x-forwarded-proto"] || "https";
     const host = req.headers.host || "localhost";
     const url = new URL(req.url, `${protocol}://${host}`);
@@ -33,7 +48,7 @@ export default async function handler(req: any, res: any) {
     const response = await server.fetch(request, {}, {});
 
     res.statusCode = response.status;
-    response.headers.forEach((value: string, name: string) => {
+    response.headers?.forEach((value: string, name: string) => {
       res.setHeader(name, value);
     });
 
