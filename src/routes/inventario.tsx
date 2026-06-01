@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/PageHeader";
 import { Progress } from "@/components/ui/progress";
-import { Package, AlertTriangle, Layers, Layers3, Loader2, Plus, X } from "lucide-react";
+import { Package, AlertTriangle, Layers, Layers3, Loader2, Plus, X, Search, Edit2, Trash, Eye } from "lucide-react";
 import { inventario as inventarioApi, default as api } from "@/lib/api";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -21,6 +21,8 @@ export const Route = createFileRoute("/inventario")({
 function InventarioPage() {
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [filterQuery, setFilterQuery] = useState("");
   const [nuevoMaterial, setNuevoMaterial] = useState({
     nombre: "",
     unidad: "Unidades",
@@ -31,9 +33,19 @@ function InventarioPage() {
   });
 
   const { data: inventarioData = [], isLoading } = useQuery({
-    queryKey: ["inventario"],
-    queryFn: inventarioApi.listar,
+    queryKey: ["inventario", filterQuery],
+    queryFn: () => inventarioApi.listar(), // El backend actual no filtra por query en el endpoint principal, lo haremos en el frontend o ajustaremos el backend si es necesario
   });
+
+  // Filtrado en el frontend para respuesta inmediata
+  const filteredData = inventarioData.filter((m: any) => 
+    m.nombre.toLowerCase().includes(filterQuery.toLowerCase()) ||
+    m.proveedor?.toLowerCase().includes(filterQuery.toLowerCase())
+  );
+
+  const handleSearch = () => {
+    setFilterQuery(searchTerm);
+  };
 
   const mutation = useMutation({
     mutationFn: (data: any) => api.post("/inventario/", data),
@@ -115,6 +127,19 @@ function InventarioPage() {
 
         {/* Botón de acción / Filtro Rápido */}
         <div className="flex items-center justify-end gap-2">
+          <div className="flex items-center gap-2 bg-muted/30 p-1 rounded-lg border border-border/40">
+            <Input 
+              placeholder="Buscar insumo..." 
+              className="h-8 w-48 bg-transparent border-0 focus-visible:ring-0 text-xs" 
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && handleSearch()}
+            />
+            <Button size="icon" variant="ghost" className="h-8 w-8" onClick={handleSearch}>
+              <Search className="h-4 w-4" />
+            </Button>
+          </div>
+
           <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
               <Button className="gradient-primary text-xs gap-1.5 shadow-elegant">
@@ -212,7 +237,7 @@ function InventarioPage() {
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {inventarioData.map((m: any) => {
+              {filteredData.map((m: any) => {
                 const esCritico = m.stock_actual <= m.stock_minimo;
                 const porcentajeCarga = Math.min(100, Math.round((m.stock_actual / (m.stock_minimo * 3)) * 100));
 
@@ -224,9 +249,14 @@ function InventarioPage() {
                           <p className="text-xs font-bold text-muted-foreground uppercase tracking-tight">{m.proveedor || "Insumo"}</p>
                           <h4 className="text-lg font-black text-foreground">{m.nombre}</h4>
                         </div>
-                        <Badge className={`${esCritico ? "bg-destructive/10 text-destructive" : "bg-success/10 text-success"} border-0`}>
-                          {esCritico ? "Crítico" : "Estable"}
-                        </Badge>
+                        <div className="flex gap-1">
+                          <Button size="icon" variant="ghost" className="h-7 w-7 text-muted-foreground hover:text-accent">
+                            <Edit2 className="h-3.5 w-3.5" />
+                          </Button>
+                          <Button size="icon" variant="ghost" className="h-7 w-7 text-muted-foreground hover:text-destructive">
+                            <Trash className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
                       </div>
 
                       <div className="space-y-2">

@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/PageHeader";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
-import { Plus, Loader2 } from "lucide-react";
+import { Plus, Loader2, Search, Edit2, Trash } from "lucide-react";
 import { ventas as ventasApi, clientes as clientesApi } from "@/lib/api";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -27,6 +27,8 @@ function estadoColor(s: string) {
 
 function VentasPage() {
   const queryClient = useQueryClient();
+  const [searchTerm, setSearchTerm] = useState("");
+  const [filterQuery, setFilterQuery] = useState("");
   const [newVenta, setNewVenta] = useState({
     cliente_id: "",
     tipo_cortina: "Blackout",
@@ -39,6 +41,17 @@ function VentasPage() {
     queryKey: ["ventas"],
     queryFn: ventasApi.listar,
   });
+
+  // Filtrado en el frontend para respuesta inmediata
+  const filteredPedidos = pedidos.filter((p: any) => 
+    p.cliente_nombre.toLowerCase().includes(filterQuery.toLowerCase()) ||
+    p.tipo_cortina.toLowerCase().includes(filterQuery.toLowerCase()) ||
+    p.codigo?.toLowerCase().includes(filterQuery.toLowerCase())
+  );
+
+  const handleSearch = () => {
+    setFilterQuery(searchTerm);
+  };
 
   const { data: clientes = [] } = useQuery({
     queryKey: ["clientes"],
@@ -161,9 +174,23 @@ function VentasPage() {
             </Card>
 
             <Card className="lg:col-span-2 shadow-elegant">
-              <CardHeader>
-                <CardTitle>Pedidos recientes</CardTitle>
-                <CardDescription>Últimos pedidos registrados en el sistema</CardDescription>
+              <CardHeader className="flex flex-row items-center justify-between">
+                <div>
+                  <CardTitle>Pedidos recientes</CardTitle>
+                  <CardDescription>Últimos pedidos registrados en el sistema</CardDescription>
+                </div>
+                <div className="flex items-center gap-2 bg-muted/30 p-1 rounded-lg border border-border/40">
+                  <Input 
+                    placeholder="Buscar pedido..." 
+                    className="h-8 w-48 bg-transparent border-0 focus-visible:ring-0 text-xs" 
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && handleSearch()}
+                  />
+                  <Button size="icon" variant="ghost" className="h-8 w-8" onClick={handleSearch}>
+                    <Search className="h-4 w-4" />
+                  </Button>
+                </div>
               </CardHeader>
               <CardContent>
                 {isLoading ? (
@@ -180,10 +207,11 @@ function VentasPage() {
                         <TableHead className="text-right">Cant.</TableHead>
                         <TableHead className="text-right">Total</TableHead>
                         <TableHead>Estado</TableHead>
+                        <TableHead className="text-right">Acciones</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {pedidos.map((p: any) => (
+                      {filteredPedidos.map((p: any) => (
                         <TableRow key={p.id}>
                           <TableCell className="font-mono text-xs">{p.codigo}</TableCell>
                           <TableCell className="font-medium">{p.cliente_nombre}</TableCell>
@@ -192,6 +220,16 @@ function VentasPage() {
                           <TableCell className="text-right font-semibold text-accent">Bs. {p.total.toLocaleString()}</TableCell>
                           <TableCell>
                             <Badge className={`${estadoColor(p.estado)} border-0`}>{p.estado}</Badge>
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex justify-end gap-1">
+                              <Button size="icon" variant="ghost" className="h-7 w-7 text-muted-foreground hover:text-accent">
+                                <Edit2 className="h-3.5 w-3.5" />
+                              </Button>
+                              <Button size="icon" variant="ghost" className="h-7 w-7 text-muted-foreground hover:text-destructive">
+                                <Trash className="h-3.5 w-3.5" />
+                              </Button>
+                            </div>
                           </TableCell>
                         </TableRow>
                       ))}

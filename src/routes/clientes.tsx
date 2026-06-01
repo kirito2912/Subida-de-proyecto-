@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Search, UserPlus, Phone, Mail, Loader2 } from "lucide-react";
+import { Search, UserPlus, Phone, Mail, Loader2, Edit2, Trash } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
 import { useState } from "react";
 import { clientes as clientesApi, ventas as ventasApi } from "@/lib/api";
@@ -23,14 +23,19 @@ function tipoColor(t: string) {
 }
 
 function ClientesPage() {
-  const [q, setQ] = useState("");
+  const [searchTerm, setSearchTerm] = useState("");
+  const [filterQuery, setFilterQuery] = useState("");
   const [newCliente, setNewCliente] = useState({ nombre: "", telefono: "", email: "", tipo: "Particular" });
   const queryClient = useQueryClient();
 
   const { data: clientes = [], isLoading } = useQuery({
-    queryKey: ["clientes", q],
-    queryFn: () => clientesApi.listar(q),
+    queryKey: ["clientes", filterQuery],
+    queryFn: () => clientesApi.listar(filterQuery),
   });
+
+  const handleSearch = () => {
+    setFilterQuery(searchTerm);
+  };
 
   const { data: historial = [] } = useQuery({
     queryKey: ["ventas"],
@@ -126,14 +131,17 @@ function ClientesPage() {
                   <CardTitle>Listado de clientes</CardTitle>
                   <CardDescription>{clientes.length} clientes registrados</CardDescription>
                 </div>
-                <div className="relative w-64">
-                  <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                <div className="flex items-center gap-2 bg-muted/30 p-1 rounded-lg border border-border/40">
                   <Input 
-                    className="pl-8" 
+                    className="h-8 w-48 bg-transparent border-0 focus-visible:ring-0 text-xs" 
                     placeholder="Buscar cliente..." 
-                    value={q} 
-                    onChange={(e) => setQ(e.target.value)} 
+                    value={searchTerm} 
+                    onChange={(e) => setSearchTerm(e.target.value)} 
+                    onKeyDown={(e) => e.key === "Enter" && handleSearch()}
                   />
+                  <Button size="icon" variant="ghost" className="h-8 w-8" onClick={handleSearch}>
+                    <Search className="h-4 w-4" />
+                  </Button>
                 </div>
               </CardHeader>
               <CardContent>
@@ -151,6 +159,7 @@ function ClientesPage() {
                         <TableHead>Contacto</TableHead>
                         <TableHead className="text-right">Pedidos</TableHead>
                         <TableHead className="text-right">Total</TableHead>
+                        <TableHead className="text-right">Acciones</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -167,6 +176,16 @@ function ClientesPage() {
                           </TableCell>
                           <TableCell className="text-right font-semibold">{c.total_pedidos}</TableCell>
                           <TableCell className="text-right font-bold text-accent">Bs. {c.total_monto.toLocaleString()}</TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex justify-end gap-1">
+                              <Button size="icon" variant="ghost" className="h-7 w-7 text-muted-foreground hover:text-accent">
+                                <Edit2 className="h-3.5 w-3.5" />
+                              </Button>
+                              <Button size="icon" variant="ghost" className="h-7 w-7 text-muted-foreground hover:text-destructive">
+                                <Trash className="h-3.5 w-3.5" />
+                              </Button>
+                            </div>
+                          </TableCell>
                         </TableRow>
                       ))}
                       {clientes.length === 0 && (
