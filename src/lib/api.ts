@@ -1,8 +1,10 @@
 import axios from "axios";
 
 // Instancia base de Axios apuntando al puerto de tu backend
+const baseURL = import.meta.env.VITE_API_URL || "/api";
+
 const instance = axios.create({
-  baseURL: "/api",
+  baseURL: baseURL,
   headers: {
     "Content-Type": "application/json",
   },
