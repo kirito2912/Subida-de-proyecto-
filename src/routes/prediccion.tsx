@@ -159,6 +159,9 @@ function PrediccionPage() {
       setCleaning(true);
       await api.delete("/prediccion/limpiar");
       setModelMetrics(null);
+      // Forzar limpieza inmediata de los datos en caché para que la UI se actualice
+      queryClient.setQueryData(["prediccion-adelante"], []);
+      queryClient.setQueryData(["prediccion-historico"], []);
       queryClient.invalidateQueries({ queryKey: ["prediccion-adelante"] });
       queryClient.invalidateQueries({ queryKey: ["prediccion-historico"] });
     } catch (error) {

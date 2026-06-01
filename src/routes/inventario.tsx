@@ -1,11 +1,17 @@
+import { useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/PageHeader";
 import { Progress } from "@/components/ui/progress";
-import { Package, AlertTriangle, Layers, Layers3, Loader2 } from "lucide-react";
-import { inventario as inventarioApi } from "@/lib/api";
+import { Package, AlertTriangle, Layers, Layers3, Loader2, Plus, X } from "lucide-react";
+import { inventario as inventarioApi, default as api } from "@/lib/api";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { toast } from "sonner";
 
 export const Route = createFileRoute("/inventario")({
   component: InventarioPage,
@@ -13,10 +19,46 @@ export const Route = createFileRoute("/inventario")({
 });
 
 function InventarioPage() {
+  const queryClient = useQueryClient();
+  const [open, setOpen] = useState(false);
+  const [nuevoMaterial, setNuevoMaterial] = useState({
+    nombre: "",
+    unidad: "Unidades",
+    stock_actual: 0,
+    stock_minimo: 10,
+    proveedor: "",
+    precio_unitario: 0
+  });
+
   const { data: inventarioData = [], isLoading } = useQuery({
     queryKey: ["inventario"],
     queryFn: inventarioApi.listar,
   });
+
+  const mutation = useMutation({
+    mutationFn: (data: any) => api.post("/inventario/", data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["inventario"] });
+      toast.success("Producto agregado al inventario");
+      setOpen(false);
+      setNuevoMaterial({
+        nombre: "",
+        unidad: "Unidades",
+        stock_actual: 0,
+        stock_minimo: 10,
+        proveedor: "",
+        precio_unitario: 0
+      });
+    },
+    onError: () => {
+      toast.error("Error al agregar el producto");
+    }
+  });
+
+  const handleAddProduct = (e: React.FormEvent) => {
+    e.preventDefault();
+    mutation.mutate(nuevoMaterial);
+  };
 
   const totalInsumos = inventarioData.length;
   const alertasCriticas = inventarioData.filter((m: any) => m.stock_actual <= m.stock_minimo).length;
@@ -72,9 +114,84 @@ function InventarioPage() {
         </div>
 
         {/* Botón de acción / Filtro Rápido */}
-        <div className="flex items-center justify-end">
-          <Badge className="bg-accent/10 text-accent hover:bg-accent/20 border border-accent/30 text-xs px-3 py-1.5 rounded-lg cursor-pointer font-medium gap-1.5">
-            <Layers3 className="h-3.5 w-3.5" /> Ver Todo el Almacén
+        <div className="flex items-center justify-end gap-2">
+          <Dialog open={open} onOpenChange={setOpen}>
+            <DialogTrigger asChild>
+              <Button className="gradient-primary text-xs gap-1.5 shadow-elegant">
+                <Plus className="h-4 w-4" /> Agregar Producto
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-[425px]">
+              <DialogHeader>
+                <DialogTitle>Agregar nuevo material</DialogTitle>
+                <CardDescription>Completa los datos para registrar un nuevo insumo en el almacén.</CardDescription>
+              </DialogHeader>
+              <form onSubmit={handleAddProduct} className="space-y-4 py-4">
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="nombre" className="text-right">Nombre</Label>
+                  <Input 
+                    id="nombre" 
+                    className="col-span-3" 
+                    value={nuevoMaterial.nombre}
+                    onChange={(e) => setNuevoMaterial({...nuevoMaterial, nombre: e.target.value})}
+                    required
+                  />
+                </div>
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="proveedor" className="text-right">Proveedor</Label>
+                  <Input 
+                    id="proveedor" 
+                    className="col-span-3" 
+                    value={nuevoMaterial.proveedor}
+                    onChange={(e) => setNuevoMaterial({...nuevoMaterial, proveedor: e.target.value})}
+                  />
+                </div>
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="unidad" className="text-right">Unidad</Label>
+                  <select 
+                    id="unidad"
+                    className="col-span-3 h-10 rounded-md border bg-background px-3 text-sm"
+                    value={nuevoMaterial.unidad}
+                    onChange={(e) => setNuevoMaterial({...nuevoMaterial, unidad: e.target.value})}
+                  >
+                    <option>Unidades</option>
+                    <option>Metros</option>
+                    <option>Rollos</option>
+                    <option>Kilos</option>
+                  </select>
+                </div>
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="stock" className="text-right">Stock Inicial</Label>
+                  <Input 
+                    id="stock" 
+                    type="number"
+                    className="col-span-3" 
+                    value={nuevoMaterial.stock_actual}
+                    onChange={(e) => setNuevoMaterial({...nuevoMaterial, stock_actual: parseFloat(e.target.value)})}
+                  />
+                </div>
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="minimo" className="text-right">Mínimo</Label>
+                  <Input 
+                    id="minimo" 
+                    type="number"
+                    className="col-span-3" 
+                    value={nuevoMaterial.stock_minimo}
+                    onChange={(e) => setNuevoMaterial({...nuevoMaterial, stock_minimo: parseFloat(e.target.value)})}
+                  />
+                </div>
+                <DialogFooter>
+                  <Button type="submit" className="gradient-primary w-full" disabled={mutation.isPending}>
+                    {mutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                    Guardar Producto
+                  </Button>
+                </DialogFooter>
+              </form>
+            </DialogContent>
+          </Dialog>
+          
+          <Badge className="bg-accent/10 text-accent hover:bg-accent/20 border border-accent/30 text-xs px-3 py-1.5 rounded-lg cursor-pointer font-medium gap-1.5 h-10">
+            <Layers3 className="h-3.5 w-3.5" /> Ver Todo
           </Badge>
         </div>
       </div>

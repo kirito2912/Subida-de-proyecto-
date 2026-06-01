@@ -51,6 +51,7 @@ function ClientesPage() {
 
   const handleCreate = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!newCliente.nombre.trim()) return toast.error("El nombre es obligatorio");
     mutation.mutate(newCliente);
   };
 
