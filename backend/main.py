@@ -32,8 +32,8 @@ ALLOWED_ORIGINS = os.getenv(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=False,
+    allow_origins=["*"], # Permitir todos los orígenes para facilitar el despliegue inicial
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )

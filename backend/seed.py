@@ -2,6 +2,7 @@
 seed.py — Pobla la base de datos con datos de ejemplo.
 Ejecutar: python seed.py
 """
+print("Starting seed.py...")
 from datetime import datetime, timedelta
 import random
 from database import SessionLocal, engine, Base

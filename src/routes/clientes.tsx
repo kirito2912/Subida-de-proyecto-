@@ -10,7 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Search, UserPlus, Phone, Mail, Loader2 } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
 import { useState } from "react";
-import api from "@/lib/api";
+import { clientes as clientesApi, ventas as ventasApi } from "@/lib/api";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/clientes")({
@@ -23,51 +23,35 @@ function tipoColor(t: string) {
 }
 
 function ClientesPage() {
-  const queryClient = useQueryClient();
   const [q, setQ] = useState("");
-  const [formData, setFormData] = useState({
-    nombre: "",
-    tipo: "Particular",
-    telefono: "",
-    email: "",
-    direccion: "",
-  });
+  const [newCliente, setNewCliente] = useState({ nombre: "", telefono: "", email: "", tipo: "Particular" });
+  const queryClient = useQueryClient();
 
-  const { data: clientes, isLoading: loadingClientes } = useQuery({
+  const { data: clientes = [], isLoading } = useQuery({
     queryKey: ["clientes", q],
-    queryFn: () => api.clientes.listar(q),
+    queryFn: () => clientesApi.listar(q),
   });
 
-  const { data: pedidos } = useQuery({
-    queryKey: ["pedidos-recientes"],
-    queryFn: () => api.ventas.listar(),
+  const { data: historial = [] } = useQuery({
+    queryKey: ["ventas"],
+    queryFn: ventasApi.listar,
   });
 
-  const crearClienteMutation = useMutation({
-    mutationFn: (data: any) => api.clientes.crear(data),
+  const mutation = useMutation({
+    mutationFn: clientesApi.crear,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["clientes"] });
-      toast.success("Cliente registrado correctamente");
-      setFormData({
-        nombre: "",
-        tipo: "Particular",
-        telefono: "",
-        email: "",
-        direccion: "",
-      });
+      toast.success("Cliente registrado con éxito");
+      setNewCliente({ nombre: "", telefono: "", email: "", tipo: "Particular" });
     },
-    onError: (error: Error) => {
-      toast.error(`Error: ${error.message}`);
-    },
+    onError: () => {
+      toast.error("Error al registrar el cliente");
+    }
   });
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleCreate = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.nombre) {
-      toast.error("El nombre es obligatorio");
-      return;
-    }
-    crearClienteMutation.mutate(formData);
+    mutation.mutate(newCliente);
   };
 
   return (
@@ -82,50 +66,53 @@ function ClientesPage() {
 
         <TabsContent value="registro" className="space-y-4 mt-4">
           <div className="grid lg:grid-cols-3 gap-4">
-            <Card className="lg:col-span-1 shadow-elegant">
+            <Card className="lg:col-span-1 shadow-elegant h-fit">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2"><UserPlus className="h-5 w-5 text-accent" /> Nuevo cliente</CardTitle>
                 <CardDescription>Registra un cliente nuevo en el sistema</CardDescription>
               </CardHeader>
               <CardContent>
-                <form onSubmit={handleSubmit} className="space-y-3">
-                  <div><Label>Nombre completo</Label>
+                <form onSubmit={handleCreate} className="space-y-3">
+                  <div>
+                    <Label>Nombre completo</Label>
                     <Input 
                       placeholder="Ej. Juan Pérez" 
-                      value={formData.nombre}
-                      onChange={(e) => setFormData({ ...formData, nombre: e.target.value })}
+                      value={newCliente.nombre} 
+                      onChange={(e) => setNewCliente({...newCliente, nombre: e.target.value})}
+                      required
                     />
                   </div>
-                  <div><Label>Teléfono</Label>
+                  <div>
+                    <Label>Teléfono</Label>
                     <Input 
                       placeholder="+591..." 
-                      value={formData.telefono}
-                      onChange={(e) => setFormData({ ...formData, telefono: e.target.value })}
+                      value={newCliente.telefono} 
+                      onChange={(e) => setNewCliente({...newCliente, telefono: e.target.value})}
                     />
                   </div>
-                  <div><Label>Email</Label>
+                  <div>
+                    <Label>Email</Label>
                     <Input 
                       type="email" 
                       placeholder="correo@ejemplo.com" 
-                      value={formData.email}
-                      onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                      value={newCliente.email} 
+                      onChange={(e) => setNewCliente({...newCliente, email: e.target.value})}
                     />
                   </div>
-                  <div><Label>Tipo de cliente</Label>
+                  <div>
+                    <Label>Tipo de cliente</Label>
                     <select 
                       className="w-full h-10 rounded-md border bg-background px-3 text-sm"
-                      value={formData.tipo}
-                      onChange={(e) => setFormData({ ...formData, tipo: e.target.value })}
+                      value={newCliente.tipo}
+                      onChange={(e) => setNewCliente({...newCliente, tipo: e.target.value})}
                     >
-                      <option>Particular</option><option>Mayorista</option><option>Corporativo</option>
+                      <option>Particular</option>
+                      <option>Mayorista</option>
+                      <option>Corporativo</option>
                     </select>
                   </div>
-                  <Button 
-                    type="submit" 
-                    className="w-full gradient-primary"
-                    disabled={crearClienteMutation.isPending}
-                  >
-                    {crearClienteMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                  <Button type="submit" className="w-full gradient-primary" disabled={mutation.isPending}>
+                    {mutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                     Registrar cliente
                   </Button>
                 </form>
@@ -136,7 +123,7 @@ function ClientesPage() {
               <CardHeader className="flex flex-row items-center justify-between">
                 <div>
                   <CardTitle>Listado de clientes</CardTitle>
-                  <CardDescription>{clientes?.length ?? 0} clientes registrados</CardDescription>
+                  <CardDescription>{clientes.length} clientes registrados</CardDescription>
                 </div>
                 <div className="relative w-64">
                   <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -149,18 +136,24 @@ function ClientesPage() {
                 </div>
               </CardHeader>
               <CardContent>
-                {loadingClientes ? (
-                  <div className="flex justify-center py-8"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>
+                {isLoading ? (
+                  <div className="flex justify-center py-8">
+                    <Loader2 className="h-8 w-8 animate-spin text-accent" />
+                  </div>
                 ) : (
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>Código</TableHead><TableHead>Nombre</TableHead><TableHead>Tipo</TableHead>
-                        <TableHead>Contacto</TableHead><TableHead className="text-right">Pedidos</TableHead><TableHead className="text-right">Total</TableHead>
+                        <TableHead>ID</TableHead>
+                        <TableHead>Nombre</TableHead>
+                        <TableHead>Tipo</TableHead>
+                        <TableHead>Contacto</TableHead>
+                        <TableHead className="text-right">Pedidos</TableHead>
+                        <TableHead className="text-right">Total</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {clientes?.map((c) => (
+                      {clientes.map((c: any) => (
                         <TableRow key={c.id}>
                           <TableCell className="font-mono text-xs">{c.codigo}</TableCell>
                           <TableCell className="font-medium">{c.nombre}</TableCell>
@@ -172,9 +165,16 @@ function ClientesPage() {
                             </div>
                           </TableCell>
                           <TableCell className="text-right font-semibold">{c.total_pedidos}</TableCell>
-                          <TableCell className="text-right font-semibold text-accent">Bs. {c.total_monto.toLocaleString()}</TableCell>
+                          <TableCell className="text-right font-bold text-accent">Bs. {c.total_monto.toLocaleString()}</TableCell>
                         </TableRow>
                       ))}
+                      {clientes.length === 0 && (
+                        <TableRow>
+                          <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                            No se encontraron clientes.
+                          </TableCell>
+                        </TableRow>
+                      )}
                     </TableBody>
                   </Table>
                 )}
@@ -186,31 +186,41 @@ function ClientesPage() {
         <TabsContent value="historial" className="mt-4">
           <Card className="shadow-elegant">
             <CardHeader>
-              <CardTitle>Historial de compras</CardTitle>
-              <CardDescription>Últimas transacciones registradas</CardDescription>
+              <CardTitle>Historial de ventas</CardTitle>
+              <CardDescription>Últimas transacciones realizadas</CardDescription>
             </CardHeader>
             <CardContent>
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Fecha</TableHead><TableHead>Cliente</TableHead><TableHead>Producto</TableHead>
-                    <TableHead className="text-right">Monto</TableHead><TableHead>Estado</TableHead>
+                    <TableHead>Fecha</TableHead>
+                    <TableHead>Cliente</TableHead>
+                    <TableHead>Producto</TableHead>
+                    <TableHead className="text-right">Monto</TableHead>
+                    <TableHead>Estado</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {pedidos?.slice(0, 10).map((h) => (
-                    <TableRow key={h.id}>
-                      <TableCell className="font-mono text-xs">{new Date(h.fecha_pedido).toLocaleDateString()}</TableCell>
-                      <TableCell className="font-medium">{h.cliente_nombre}</TableCell>
-                      <TableCell>Cortina {h.tipo_cortina} x {h.cantidad}</TableCell>
-                      <TableCell className="text-right font-semibold">Bs. {h.total.toLocaleString()}</TableCell>
+                  {historial.map((v: any) => (
+                    <TableRow key={v.id}>
+                      <TableCell className="text-sm">{new Date(v.fecha_pedido).toLocaleDateString()}</TableCell>
+                      <TableCell className="font-medium">{v.cliente_nombre || "Cliente"}</TableCell>
+                      <TableCell>{v.tipo_cortina} x {v.cantidad}</TableCell>
+                      <TableCell className="text-right font-bold text-accent">Bs. {v.total.toLocaleString()}</TableCell>
                       <TableCell>
-                        <Badge className={h.estado === "Entregado" ? "bg-success/15 text-success border-0" : "bg-warning/15 text-warning-foreground border-0"}>
-                          {h.estado}
+                        <Badge variant={v.estado === "Entregado" ? "default" : "outline"}>
+                          {v.estado}
                         </Badge>
                       </TableCell>
                     </TableRow>
                   ))}
+                  {historial.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+                        No hay historial de ventas.
+                      </TableCell>
+                    </TableRow>
+                  )}
                 </TableBody>
               </Table>
             </CardContent>

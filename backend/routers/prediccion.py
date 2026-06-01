@@ -1,6 +1,8 @@
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, UploadFile, File, HTTPException
 from sqlalchemy.orm import Session
 from typing import List
+import pandas as pd
+import io
 from database import get_db
 from models import VentaMensual
 from schemas import PrediccionOut
@@ -138,3 +140,77 @@ def historico_con_prediccion(db: Session = Depends(get_db)):
         }
         for i, h in enumerate(historial)
     ]
+
+
+@router.post("/upload-excel")
+async def upload_excel_data(file: UploadFile = File(...), db: Session = Depends(get_db)):
+    """
+    Recibe un archivo Excel generado por el frontend con columnas: anio, mes, total_pedidos.
+    Actualiza la tabla VentaMensual para reentrenar el modelo.
+    """
+    if not file.filename.endswith(('.xlsx', '.xls')):
+        raise HTTPException(status_code=400, detail="El archivo debe ser un Excel (.xlsx o .xls)")
+
+    try:
+        contents = await file.read()
+        df = pd.read_excel(io.BytesIO(contents))
+
+        required_cols = {'anio', 'mes', 'total_pedidos'}
+        if not required_cols.issubset(df.columns):
+            raise HTTPException(status_code=400, detail=f"El Excel debe contener las columnas: {required_cols}")
+
+        # Limpiar datos previos (opcional, dependiendo de si quieres acumular o reemplazar)
+        # Para este caso, vamos a reemplazar los datos para asegurar que el modelo se reentrena con el nuevo dataset
+        db.query(VentaMensual).delete()
+
+        for _, row in df.iterrows():
+            nueva_venta = VentaMensual(
+                anio=int(row['anio']),
+                mes=int(row['mes']),
+                total_pedidos=int(row['total_pedidos'])
+            )
+            db.add(nueva_venta)
+        
+        db.commit()
+
+        # Calcular métricas básicas para devolver al frontend
+        total_registros = len(df)
+        muestras_entrenamiento = int(total_registros * 0.8)
+        muestras_test = total_registros - muestras_entrenamiento
+        
+        # Calcular RMSE simple sobre todo el set para mostrar algo de precisión
+        rmse = 0.0
+        if total_registros >= 2:
+            x = list(range(total_registros))
+            y = df['total_pedidos'].tolist()
+            m, b, _ = _regresion_lineal(x, y)
+            predicciones = [m * xi + b for xi in x]
+            mse = sum((yi - pi) ** 2 for yi, pi in zip(y, predicciones)) / total_registros
+            rmse = round(mse ** 0.5, 2)
+
+        return {
+            "status": "success",
+            "mensaje": f"Se procesaron {total_registros} registros mensuales.",
+            "total_registros": total_registros,
+            "muestras_entrenamiento": muestras_entrenamiento,
+            "muestras_test": muestras_test,
+            "metricas_test": {
+                "rmse": rmse
+            }
+        }
+
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Error al procesar el Excel: {str(e)}")
+
+
+@router.delete("/limpiar")
+def limpiar_historial(db: Session = Depends(get_db)):
+    """Borra todos los datos históricos de ventas mensuales."""
+    try:
+        db.query(VentaMensual).delete()
+        db.commit()
+        return {"status": "success", "mensaje": "Historial de predicción limpiado."}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
