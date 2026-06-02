@@ -98,7 +98,7 @@ def resumen_mensual(db: Session = Depends(get_db)):
             "mes": MESES_ES[r.mes - 1],
             "anio": r.anio,
             "mes_numero": r.mes,
-            "ventas": r.total_pedidos,
+            "total_pedidos": r.total_pedidos,
             "monto": r.total_monto,
         }
         for r in rows

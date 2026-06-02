@@ -77,30 +77,38 @@ function PrediccionPage() {
             }
           } else {
             const data = new Uint8Array(e.target?.result as ArrayBuffer);
-            const workbook = XLSX.read(data, { type: "array" });
+            const workbook = XLSX.read(data, { type: "array", cellDates: true });
             const worksheet = workbook.Sheets[workbook.SheetNames[0]];
             const jsonData: any[] = XLSX.utils.sheet_to_json(worksheet, { defval: "" });
 
             rowsRaw = jsonData.map((fila) => {
               const keys = Object.keys(fila);
               const keyFecha = keys.find(k => k.toUpperCase().includes("FECHA") || k.toUpperCase().includes("MES"));
-              const keyProduccion = keys.find(k => k.toUpperCase().includes("PEODUCCION") || k.toUpperCase().includes("PRODUCCION"));
+              const keyProduccion = keys.find(k => k.toUpperCase().includes("PEODUCCION") || k.toUpperCase().includes("PRODUCCION") || k.toUpperCase().includes("CANTIDAD"));
               return { fecha: keyFecha ? fila[keyFecha] : "", cantidad: keyProduccion ? fila[keyProduccion] : "" };
             });
           }
 
           const datosLimpios: any[] = [];
           rowsRaw.forEach((row) => {
-            if (!row.fecha || !row.cantidad) return;
+            if (!row.fecha || row.cantidad === undefined || row.cantidad === "") return;
             let anio = 0, mes = 0;
-            const partes = String(row.fecha).trim().split(/[-/]/);
 
-            if (partes.length >= 3) {
-              if (partes[0].length === 4) { anio = parseInt(partes[0]); mes = parseInt(partes[1]); }
-              else if (partes[2].length === 4) { anio = parseInt(partes[2]); mes = parseInt(partes[1]); }
-            } else if (partes.length === 2) {
-              if (partes[0].length === 4) { anio = parseInt(partes[0]); mes = parseInt(partes[1]); }
-              else if (partes[1].length === 4) { anio = parseInt(partes[1]); mes = parseInt(partes[0]); }
+            // Manejo robusto de fechas (Date objects, strings o números de Excel)
+            if (row.fecha instanceof Date) {
+              anio = row.fecha.getFullYear();
+              mes = row.fecha.getMonth() + 1;
+            } else {
+              const fechaStr = String(row.fecha).trim();
+              const partes = fechaStr.split(/[-/]/);
+
+              if (partes.length >= 3) {
+                if (partes[0].length === 4) { anio = parseInt(partes[0]); mes = parseInt(partes[1]); }
+                else if (partes[2].length === 4) { anio = parseInt(partes[2]); mes = parseInt(partes[1]); }
+              } else if (partes.length === 2) {
+                if (partes[0].length === 4) { anio = parseInt(partes[0]); mes = parseInt(partes[1]); }
+                else if (partes[1].length === 4) { anio = parseInt(partes[1]); mes = parseInt(partes[0]); }
+              }
             }
 
             const total_pedidos = parseInt(row.cantidad) || 0;
@@ -118,7 +126,7 @@ function PrediccionPage() {
 
           const datosFinales = Object.values(mapaAgrupado);
           if (datosFinales.length === 0) {
-            alert("No se estructuraron registros. Revisa los campos del archivo.");
+            alert("No se estructuraron registros. Revisa que el archivo tenga columnas como 'FECHA' y 'PRODUCCION'.");
             setUploading(false);
             return;
           }
@@ -131,16 +139,17 @@ function PrediccionPage() {
           const formData = new FormData();
           formData.append("file", blob, "dataset_agrupado.xlsx");
 
-          const response = await api.post("/prediccion/upload-excel", formData, {
-            headers: { "Content-Type": "multipart/form-data" },
-          });
+          // NOTA: No establecemos manualmente Content-Type para que Axios/Browser manejen el boundary
+          const response = await api.post("/prediccion/upload-excel", formData);
           
           setModelMetrics(response.data);
           queryClient.invalidateQueries({ queryKey: ["prediccion-adelante"] });
           queryClient.invalidateQueries({ queryKey: ["prediccion-historico"] });
 
-        } catch (err) {
-          alert("Error interno al procesar el archivo.");
+        } catch (err: any) {
+          console.error("Error al subir el archivo:", err);
+          const errorMsg = err.response?.data?.detail || err.message || "Error desconocido";
+          alert(`Error al procesar el archivo: ${errorMsg}`);
         } finally {
           setUploading(false);
         }

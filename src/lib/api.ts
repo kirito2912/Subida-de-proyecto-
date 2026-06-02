@@ -5,9 +5,6 @@ const baseURL = import.meta.env.VITE_API_URL || "/api";
 
 const instance = axios.create({
   baseURL: baseURL,
-  headers: {
-    "Content-Type": "application/json",
-  },
 });
 
 // Métodos específicos para el módulo de dashboard
@@ -82,6 +79,30 @@ export const prediccion = {
   }
 };
 
+// Métodos específicos para el módulo de quejas
+export const quejas = {
+  listar: async (estado?: string, tipo?: string) => {
+    const response = await instance.get("/quejas/", { params: { estado, tipo } });
+    return response.data;
+  },
+  obtener: async (id: number) => {
+    const response = await instance.get(`/quejas/${id}`);
+    return response.data;
+  },
+  crear: async (data: any) => {
+    const response = await instance.post("/quejas/", data);
+    return response.data;
+  },
+  actualizar: async (id: number, data: any) => {
+    const response = await instance.put(`/quejas/${id}`, data);
+    return response.data;
+  },
+  eliminar: async (id: number) => {
+    const response = await instance.delete(`/quejas/${id}`);
+    return response.data;
+  },
+};
+
 // Exportación por defecto
 export default {
   dashboard,
@@ -89,8 +110,9 @@ export default {
   ventas,
   inventario,
   prediccion,
-  post: instance.post,
-  delete: instance.delete,
-  patch: instance.patch,
-  get: instance.get,
+  quejas,
+  post: (url: string, data?: any, config?: any) => instance.post(url, data, config),
+  delete: (url: string, config?: any) => instance.delete(url, config),
+  patch: (url: string, data?: any, config?: any) => instance.patch(url, data, config),
+  get: (url: string, config?: any) => instance.get(url, config),
 };
