@@ -112,6 +112,7 @@ export default {
   prediccion,
   quejas,
   post: (url: string, data?: any, config?: any) => instance.post(url, data, config),
+  put: (url: string, data?: any, config?: any) => instance.put(url, data, config),
   delete: (url: string, config?: any) => instance.delete(url, config),
   patch: (url: string, data?: any, config?: any) => instance.patch(url, data, config),
   get: (url: string, config?: any) => instance.get(url, config),

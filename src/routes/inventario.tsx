@@ -21,6 +21,8 @@ export const Route = createFileRoute("/inventario")({
 function InventarioPage() {
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
+  const [editingMaterial, setEditingMaterial] = useState<any>(null);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [filterQuery, setFilterQuery] = useState("");
   const [nuevoMaterial, setNuevoMaterial] = useState({
@@ -34,14 +36,50 @@ function InventarioPage() {
 
   const { data: inventarioData = [], isLoading } = useQuery({
     queryKey: ["inventario", filterQuery],
-    queryFn: () => inventarioApi.listar(), // El backend actual no filtra por query en el endpoint principal, lo haremos en el frontend o ajustaremos el backend si es necesario
+    queryFn: () => inventarioApi.listar(), 
   });
 
-  // Filtrado en el frontend para respuesta inmediata
-  const filteredData = inventarioData.filter((m: any) => 
-    m.nombre.toLowerCase().includes(filterQuery.toLowerCase()) ||
-    m.proveedor?.toLowerCase().includes(filterQuery.toLowerCase())
-  );
+  const deleteMutation = useMutation({
+    mutationFn: (id: number) => api.delete(`/inventario/${id}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["inventario"] });
+      toast.success("Insumo eliminado del inventario");
+    },
+    onError: () => toast.error("Error al eliminar el insumo")
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: (data: any) => api.put(`/inventario/${data.id}`, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["inventario"] });
+      toast.success("Insumo actualizado correctamente");
+      setIsEditDialogOpen(false);
+    },
+    onError: () => toast.error("Error al actualizar el insumo")
+  });
+
+  const handleEdit = (material: any) => {
+    setEditingMaterial({ ...material });
+    setIsEditDialogOpen(true);
+  };
+
+  const handleDelete = (id: number) => {
+    if (confirm("¿Estás seguro de que deseas eliminar este insumo del almacén?")) {
+      deleteMutation.mutate(id);
+    }
+  };
+
+  const handleUpdate = (e: React.FormEvent) => {
+    e.preventDefault();
+    updateMutation.mutate(editingMaterial);
+  };
+
+  const filteredData = Array.isArray(inventarioData) ? inventarioData.filter((m: any) => {
+    const nombre = (m?.nombre || "").toLowerCase();
+    const proveedor = (m?.proveedor || "").toLowerCase();
+    const query = (filterQuery || "").toLowerCase();
+    return nombre.includes(query) || proveedor.includes(query);
+  }) : [];
 
   const handleSearch = () => {
     setFilterQuery(searchTerm);
@@ -72,8 +110,8 @@ function InventarioPage() {
     mutation.mutate(nuevoMaterial);
   };
 
-  const totalInsumos = inventarioData.length;
-  const alertasCriticas = inventarioData.filter((m: any) => m.stock_actual <= m.stock_minimo).length;
+  const totalInsumos = Array.isArray(inventarioData) ? inventarioData.length : 0;
+  const alertasCriticas = Array.isArray(inventarioData) ? inventarioData.filter((m: any) => m.stock_actual <= m.stock_minimo).length : 0;
   const lotesEstables = totalInsumos - alertasCriticas;
 
   return (
@@ -238,8 +276,13 @@ function InventarioPage() {
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {filteredData.map((m: any) => {
-                const esCritico = m.stock_actual <= m.stock_minimo;
-                const porcentajeCarga = Math.min(100, Math.round((m.stock_actual / (m.stock_minimo * 3)) * 100));
+                const stockActual = Number(m?.stock_actual || 0);
+                const stockMinimo = Number(m?.stock_minimo || 0);
+                const esCritico = stockActual <= stockMinimo;
+                
+                // Evitar división por cero y NaN
+                const divisor = stockMinimo > 0 ? stockMinimo * 3 : 1;
+                const porcentajeCarga = Math.min(100, Math.round((stockActual / divisor) * 100));
 
                 return (
                   <Card key={m.id} className={`shadow-elegant transition-all duration-300 hover:scale-[1.01] ${esCritico ? "border-destructive/30" : "border-border"}`}>
@@ -247,13 +290,13 @@ function InventarioPage() {
                       <div className="flex justify-between items-start">
                         <div>
                           <p className="text-xs font-bold text-muted-foreground uppercase tracking-tight">{m.proveedor || "Insumo"}</p>
-                          <h4 className="text-lg font-black text-foreground">{m.nombre}</h4>
+                          <h4 className="text-lg font-black text-foreground">{m.nombre || "Sin nombre"}</h4>
                         </div>
                         <div className="flex gap-1">
-                          <Button size="icon" variant="ghost" className="h-7 w-7 text-muted-foreground hover:text-accent">
+                          <Button size="icon" variant="ghost" className="h-7 w-7 text-muted-foreground hover:text-accent" onClick={() => handleEdit(m)}>
                             <Edit2 className="h-3.5 w-3.5" />
                           </Button>
-                          <Button size="icon" variant="ghost" className="h-7 w-7 text-muted-foreground hover:text-destructive">
+                          <Button size="icon" variant="ghost" className="h-7 w-7 text-muted-foreground hover:text-destructive" onClick={() => handleDelete(m.id)}>
                             <Trash className="h-3.5 w-3.5" />
                           </Button>
                         </div>
@@ -262,23 +305,23 @@ function InventarioPage() {
                       <div className="space-y-2">
                         <div className="flex justify-between text-xs font-bold">
                           <span className="text-muted-foreground">Stock Actual</span>
-                          <span className={esCritico ? "text-destructive" : "text-accent"}>{m.stock_actual} {m.unidad}</span>
+                          <span className={esCritico ? "text-destructive" : "text-accent"}>{stockActual} {m.unidad}</span>
                         </div>
                         <Progress value={porcentajeCarga} className={`h-2.5 ${esCritico ? "bg-destructive/10" : "bg-muted"}`} />
                         <div className="flex justify-between text-[10px] font-bold text-muted-foreground/60">
                           <span>0</span>
-                          <span>Capacidad Recomendada: {m.stock_minimo * 3}</span>
+                          <span>Capacidad Recomendada: {stockMinimo * 3}</span>
                         </div>
                       </div>
 
                       <div className="pt-2 flex gap-2">
                         <div className="flex-1 bg-muted/30 rounded-lg p-2 text-center">
                           <p className="text-[10px] text-muted-foreground uppercase font-bold">Mínimo</p>
-                          <p className="text-sm font-black">{m.stock_minimo}</p>
+                          <p className="text-sm font-black">{stockMinimo}</p>
                         </div>
                         <div className="flex-1 bg-muted/30 rounded-lg p-2 text-center">
                           <p className="text-[10px] text-muted-foreground uppercase font-bold">Unidad</p>
-                          <p className="text-sm font-black">{m.unidad}</p>
+                          <p className="text-sm font-black">{m.unidad || "—"}</p>
                         </div>
                       </div>
                     </CardContent>
@@ -297,19 +340,31 @@ function InventarioPage() {
               <CardDescription className="text-xs">Sugerencias basadas en el stock actual</CardDescription>
             </CardHeader>
             <CardContent className="p-4 space-y-3">
-              {inventarioData.filter((m: any) => m.stock_actual <= m.stock_minimo).map((m: any) => (
-                <div key={m.id} className="group p-3 rounded-xl border border-border bg-background hover:bg-muted/20 transition-colors">
-                  <div className="flex items-center gap-3">
-                    <div className="h-8 w-8 rounded-lg bg-destructive/10 flex items-center justify-center shrink-0">
-                      <AlertTriangle className="h-4 w-4 text-destructive" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs font-bold truncate">{m.nombre}</p>
-                      <p className="text-[10px] text-muted-foreground font-medium">Faltan {(m.stock_minimo * 1.5 - m.stock_actual).toFixed(0)} para nivel seguro</p>
+              {Array.isArray(inventarioData) && inventarioData.filter((m: any) => {
+                const sa = Number(m?.stock_actual || 0);
+                const sm = Number(m?.stock_minimo || 0);
+                return sa <= sm;
+              }).map((m: any) => {
+                const sa = Number(m?.stock_actual || 0);
+                const sm = Number(m?.stock_minimo || 0);
+                const faltante = Math.max(0, (sm * 1.5 - sa));
+                
+                return (
+                  <div key={m.id} className="group p-3 rounded-xl border border-border bg-background hover:bg-muted/20 transition-colors">
+                    <div className="flex items-center gap-3">
+                      <div className="h-8 w-8 rounded-lg bg-destructive/10 flex items-center justify-center shrink-0">
+                        <AlertTriangle className="h-4 w-4 text-destructive" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-bold truncate">{m.nombre || "Sin nombre"}</p>
+                        <p className="text-[10px] text-muted-foreground font-medium">
+                          Faltan {faltante.toFixed(0)} para nivel seguro
+                        </p>
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
               {alertasCriticas === 0 && (
                 <div className="text-center py-6 text-xs text-muted-foreground italic">
                   Todo el inventario está en niveles seguros.
@@ -319,6 +374,72 @@ function InventarioPage() {
           </Card>
         </div>
       </div>
+
+      {/* Modal de Edición de Material */}
+      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+              <DialogTitle>Editar Insumo</DialogTitle>
+              <CardDescription>Actualiza el stock o los datos del material seleccionado.</CardDescription>
+            </DialogHeader>
+          {editingMaterial && (
+            <form onSubmit={handleUpdate} className="space-y-4 py-4">
+              <div className="space-y-2">
+                <Label>Nombre del Material</Label>
+                <Input 
+                  value={editingMaterial.nombre} 
+                  onChange={(e) => setEditingMaterial({...editingMaterial, nombre: e.target.value})}
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Proveedor</Label>
+                <Input 
+                  value={editingMaterial.proveedor} 
+                  onChange={(e) => setEditingMaterial({...editingMaterial, proveedor: e.target.value})}
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Stock Actual</Label>
+                  <Input 
+                    type="number" 
+                    value={editingMaterial.stock_actual} 
+                    onChange={(e) => setEditingMaterial({...editingMaterial, stock_actual: parseFloat(e.target.value)})}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Stock Mínimo</Label>
+                  <Input 
+                    type="number" 
+                    value={editingMaterial.stock_minimo} 
+                    onChange={(e) => setEditingMaterial({...editingMaterial, stock_minimo: parseFloat(e.target.value)})}
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label>Unidad de Medida</Label>
+                <select 
+                  className="w-full h-10 rounded-md border bg-background px-3 text-sm"
+                  value={editingMaterial.unidad}
+                  onChange={(e) => setEditingMaterial({...editingMaterial, unidad: e.target.value})}
+                >
+                  <option>Unidades</option>
+                  <option>Metros</option>
+                  <option>Rollos</option>
+                  <option>Kilos</option>
+                </select>
+              </div>
+              <DialogFooter>
+                <Button type="submit" className="w-full gradient-primary" disabled={updateMutation.isPending}>
+                  {updateMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  Guardar Cambios
+                </Button>
+              </DialogFooter>
+            </form>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

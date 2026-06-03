@@ -1,13 +1,16 @@
 import { useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { PageHeader } from "@/components/PageHeader";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
 import { Filter, Calendar, MessageSquareWarning, ShieldAlert, CheckCircle, Wrench, Trash2, ArrowRight, Search, Loader2 } from "lucide-react";
-import { quejas as quejasApi } from "@/lib/api";
+import { quejas as quejasApi, default as api } from "@/lib/api";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { toast } from "sonner";
 
 export const Route = createFileRoute("/quejas")({
   component: QuejasPage,
@@ -22,21 +25,64 @@ function estadoEstilo(estado: string) {
 }
 
 function QuejasPage() {
+  const queryClient = useQueryClient();
   const [tempEstado, setTempEstado] = useState("");
   const [tempTipo, setTempTipo] = useState("");
   const [filtros, setFiltros] = useState({ estado: "", tipo: "" });
   const [selectedTicket, setSelectedTicket] = useState<any>(null);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [editData, setEditData] = useState({ estado: "", resolucion: "" });
 
   const { data: tickets = [], isLoading } = useQuery({
     queryKey: ["quejas", filtros],
     queryFn: () => quejasApi.listar(filtros.estado, filtros.tipo),
   });
 
+  const deleteMutation = useMutation({
+    mutationFn: (id: number) => api.delete(`/quejas/${id}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["quejas"] });
+      toast.success("Incidencia archivada correctamente");
+      setSelectedTicket(null);
+    },
+    onError: () => toast.error("Error al archivar la incidencia")
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: (data: any) => api.put(`/quejas/${data.id}`, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["quejas"] });
+      toast.success("Estado actualizado con éxito");
+      setIsEditDialogOpen(false);
+      setSelectedTicket(null);
+    },
+    onError: () => toast.error("Error al actualizar el estado")
+  });
+
   const handleSearch = () => {
     setFiltros({ estado: tempEstado, tipo: tempTipo });
   };
 
-  const ticketActivo = selectedTicket || tickets[0];
+  const handleEditClick = (ticket: any) => {
+    setEditData({ estado: ticket.estado, resolucion: ticket.resolucion || "" });
+    setIsEditDialogOpen(true);
+  };
+
+  const handleDelete = (id: number) => {
+    if (confirm("¿Estás seguro de que deseas archivar (eliminar) este caso?")) {
+      deleteMutation.mutate(id);
+    }
+  };
+
+  const handleUpdate = (e: React.FormEvent) => {
+    e.preventDefault();
+    updateMutation.mutate({
+      id: ticketActivo.id,
+      ...editData
+    });
+  };
+
+  const ticketActivo = selectedTicket || (tickets.length > 0 ? tickets[0] : null);
 
   return (
     <div className="space-y-6">
@@ -205,10 +251,16 @@ function QuejasPage() {
 
                   {/* Botonera de acciones CRUD */}
                   <div className="grid grid-cols-2 gap-3 pt-1">
-                    <button className="flex items-center justify-center gap-1.5 h-9 rounded-xl bg-primary text-primary-foreground font-semibold text-xs transition-transform active:scale-95 hover:bg-primary/90 shadow-sm">
+                    <button 
+                      className="flex items-center justify-center gap-1.5 h-9 rounded-xl bg-primary text-primary-foreground font-semibold text-xs transition-transform active:scale-95 hover:bg-primary/90 shadow-sm"
+                      onClick={() => handleEditClick(ticketActivo)}
+                    >
                       <Wrench className="h-3.5 w-3.5" /> Editar Estado <ArrowRight className="h-3.5 w-3.5 ml-0.5" />
                     </button>
-                    <button className="flex items-center justify-center gap-1.5 h-9 rounded-xl bg-destructive/10 border border-destructive/20 text-destructive font-semibold text-xs transition-colors hover:bg-destructive hover:text-white">
+                    <button 
+                      className="flex items-center justify-center gap-1.5 h-9 rounded-xl bg-destructive/10 border border-destructive/20 text-destructive font-semibold text-xs transition-colors hover:bg-destructive hover:text-white"
+                      onClick={() => handleDelete(ticketActivo.id)}
+                    >
                       <Trash2 className="h-3.5 w-3.5" /> Archivar Caso
                     </button>
                   </div>
@@ -224,6 +276,45 @@ function QuejasPage() {
         </div>
 
       </div>
+
+      {/* Modal de Edición de Queja/Incidencia */}
+      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Actualizar Incidencia</DialogTitle>
+            <CardDescription>Cambia el estado o registra una resolución técnica.</CardDescription>
+          </DialogHeader>
+          <form onSubmit={handleUpdate} className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>Estado de la Incidencia</Label>
+              <select 
+                className="w-full h-10 rounded-md border bg-background px-3 text-sm"
+                value={editData.estado}
+                onChange={(e) => setEditData({...editData, estado: e.target.value})}
+              >
+                <option value="Abierta">Abierta</option>
+                <option value="En revisión">En revisión</option>
+                <option value="Resuelta">Resuelta</option>
+              </select>
+            </div>
+            <div className="space-y-2">
+              <Label>Resolución Técnica / Respuesta</Label>
+              <textarea 
+                className="w-full min-h-[100px] rounded-md border bg-background px-3 py-2 text-sm"
+                placeholder="Escribe la solución aplicada..."
+                value={editData.resolucion}
+                onChange={(e) => setEditData({...editData, resolucion: e.target.value})}
+              />
+            </div>
+            <DialogFooter>
+              <Button type="submit" className="w-full gradient-primary" disabled={updateMutation.isPending}>
+                {updateMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Guardar Cambios
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

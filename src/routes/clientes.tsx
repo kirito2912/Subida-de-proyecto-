@@ -8,9 +8,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Search, UserPlus, Phone, Mail, Loader2, Edit2, Trash } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { PageHeader } from "@/components/PageHeader";
 import { useState } from "react";
-import { clientes as clientesApi, ventas as ventasApi } from "@/lib/api";
+import api, { clientes as clientesApi, ventas as ventasApi } from "@/lib/api";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/clientes")({
@@ -27,11 +28,48 @@ function ClientesPage() {
   const [filterQuery, setFilterQuery] = useState("");
   const [newCliente, setNewCliente] = useState({ nombre: "", telefono: "", email: "", tipo: "Particular" });
   const queryClient = useQueryClient();
+  const [editingCliente, setEditingCliente] = useState<any>(null);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
 
   const { data: clientes = [], isLoading } = useQuery({
     queryKey: ["clientes", filterQuery],
     queryFn: () => clientesApi.listar(filterQuery),
   });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: number) => api.delete(`/clientes/${id}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["clientes"] });
+      toast.success("Cliente eliminado correctamente");
+    },
+    onError: () => toast.error("Error al eliminar el cliente")
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: (data: any) => api.put(`/clientes/${data.id}`, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["clientes"] });
+      toast.success("Cliente actualizado con éxito");
+      setIsEditDialogOpen(false);
+    },
+    onError: () => toast.error("Error al actualizar el cliente")
+  });
+
+  const handleEdit = (cliente: any) => {
+    setEditingCliente({ ...cliente });
+    setIsEditDialogOpen(true);
+  };
+
+  const handleDelete = (id: number) => {
+    if (confirm("¿Estás seguro de que deseas eliminar este cliente?")) {
+      deleteMutation.mutate(id);
+    }
+  };
+
+  const handleUpdate = (e: React.FormEvent) => {
+    e.preventDefault();
+    updateMutation.mutate(editingCliente);
+  };
 
   const handleSearch = () => {
     setFilterQuery(searchTerm);
@@ -178,10 +216,10 @@ function ClientesPage() {
                           <TableCell className="text-right font-bold text-accent">Bs. {c.total_monto.toLocaleString()}</TableCell>
                           <TableCell className="text-right">
                             <div className="flex justify-end gap-1">
-                              <Button size="icon" variant="ghost" className="h-7 w-7 text-muted-foreground hover:text-accent">
+                              <Button size="icon" variant="ghost" className="h-7 w-7 text-muted-foreground hover:text-accent" onClick={() => handleEdit(c)}>
                                 <Edit2 className="h-3.5 w-3.5" />
                               </Button>
-                              <Button size="icon" variant="ghost" className="h-7 w-7 text-muted-foreground hover:text-destructive">
+                              <Button size="icon" variant="ghost" className="h-7 w-7 text-muted-foreground hover:text-destructive" onClick={() => handleDelete(c.id)}>
                                 <Trash className="h-3.5 w-3.5" />
                               </Button>
                             </div>
@@ -190,7 +228,7 @@ function ClientesPage() {
                       ))}
                       {clientes.length === 0 && (
                         <TableRow>
-                          <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                          <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
                             No se encontraron clientes.
                           </TableCell>
                         </TableRow>
@@ -201,6 +239,61 @@ function ClientesPage() {
               </CardContent>
             </Card>
           </div>
+
+          {/* Modal de Edición de Cliente */}
+          <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+            <DialogContent className="sm:max-w-[425px]">
+              <DialogHeader>
+                <DialogTitle>Editar Cliente</DialogTitle>
+                <CardDescription>Modifica los datos del cliente seleccionado.</CardDescription>
+              </DialogHeader>
+              {editingCliente && (
+                <form onSubmit={handleUpdate} className="space-y-4 py-4">
+                  <div className="space-y-2">
+                    <Label>Nombre completo</Label>
+                    <Input 
+                      value={editingCliente.nombre} 
+                      onChange={(e) => setEditingCliente({...editingCliente, nombre: e.target.value})}
+                      required
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Teléfono</Label>
+                    <Input 
+                      value={editingCliente.telefono} 
+                      onChange={(e) => setEditingCliente({...editingCliente, telefono: e.target.value})}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Email</Label>
+                    <Input 
+                      type="email"
+                      value={editingCliente.email} 
+                      onChange={(e) => setEditingCliente({...editingCliente, email: e.target.value})}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Tipo de cliente</Label>
+                    <select 
+                      className="w-full h-10 rounded-md border bg-background px-3 text-sm"
+                      value={editingCliente.tipo}
+                      onChange={(e) => setEditingCliente({...editingCliente, tipo: e.target.value})}
+                    >
+                      <option>Particular</option>
+                      <option>Mayorista</option>
+                      <option>Corporativo</option>
+                    </select>
+                  </div>
+                  <DialogFooter>
+                    <Button type="submit" className="w-full gradient-primary" disabled={updateMutation.isPending}>
+                      {updateMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                      Actualizar Cambios
+                    </Button>
+                  </DialogFooter>
+                </form>
+              )}
+            </DialogContent>
+          </Dialog>
         </TabsContent>
 
         <TabsContent value="historial" className="mt-4">
