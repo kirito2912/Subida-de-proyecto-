@@ -11,12 +11,16 @@ import { ArrowUpRight, ArrowDownRight, ShoppingBag, Factory, Package, Users } fr
 import { PageHeader } from "@/components/PageHeader";
 import { dashboard, prediccion, inventario } from "@/lib/api";
 import { Skeleton } from "@/components/ui/skeleton";
+import { on } from "events";
 
+// Definición de la ruta raíz '/' de la aplicación.
+// Asocia el componente de visualización principal (Dashboard).
 export const Route = createFileRoute("/")({
   component: Dashboard,
   head: () => ({ meta: [{ title: "Dashboard — CortinaSys" }] }),
 });
 
+// Datos de distribución por defecto para tipos de cortina en el gráfico de torta
 const tipoCortinaData = [
   { name: "Blackout", value: 35, color: "var(--chart-1)" },
   { name: "Roller", value: 28, color: "var(--chart-2)" },
@@ -25,6 +29,7 @@ const tipoCortinaData = [
   { name: "Veneciana", value: 7, color: "var(--chart-5)" },
 ];
 
+// Datos por defecto para el control de producción semanal en planta
 const produccionData = [
   { semana: "S1", proceso: 24, entregado: 38 },
   { semana: "S2", proceso: 31, entregado: 42 },
@@ -32,6 +37,11 @@ const produccionData = [
   { semana: "S4", proceso: 35, entregado: 51 },
 ];
 
+/**
+ * Componente Kpi
+ * Renderiza tarjetas de indicadores clave con soporte de estado de carga (Skeleton)
+ * y variación porcentual (delta) comparando con períodos previos.
+ */
 function Kpi({ icon: Icon, label, value, delta, positive = true, loading = false }: any) {
   return (
     <Card className="shadow-elegant border-l-4" style={{ borderLeftColor: "var(--accent)" }}>
@@ -58,17 +68,25 @@ function Kpi({ icon: Icon, label, value, delta, positive = true, loading = false
   );
 }
 
+/**
+ * Componente Dashboard
+ * Integra y coordina las consultas asíncronas de React Query para mostrar indicadores de ventas,
+ * stock crítico de materiales y estadísticas gráficas de producción e inventario.
+ */
 function Dashboard() {
+  // Consulta de React Query para KPI globales
   const { data: kpis, isLoading: isLoadingKpis } = useQuery({
     queryKey: ["kpis"],
     queryFn: dashboard.getKpis,
   });
 
+  // Consulta de React Query para datos históricos y proyecciones de regresión lineal
   const { data: histData } = useQuery({
     queryKey: ["prediccion-historico"],
-    queryFn: prediccion.historico,
+    queryFn: predicci                                                                     on.historico,
   });
 
+  // Consulta de React Query para el estado actual de los materiales en inventario
   const { data: invData } = useQuery({
     queryKey: ["inventario"],
     queryFn: inventario.listar,

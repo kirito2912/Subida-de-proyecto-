@@ -9,6 +9,10 @@ router = APIRouter(prefix="/inventario", tags=["Inventario"])
 
 
 def _material_to_out(m: Material) -> MaterialOut:
+    """
+    Función auxiliar para convertir un modelo Material a su esquema de salida MaterialOut,
+    calculando en tiempo real si se encuentra en stock crítico.
+    """
     out = MaterialOut.model_validate(m)
     out.stock_critico = m.stock_actual <= m.stock_minimo
     return out
@@ -19,6 +23,10 @@ def listar_materiales(
     solo_criticos: bool = Query(False, description="Solo materiales con stock crítico"),
     db: Session = Depends(get_db),
 ):
+    """
+    Retorna la lista de todos los insumos/materiales registrados.
+    Permite filtrar opcionalmente para retornar únicamente aquellos que tienen stock crítico.
+    """
     q = db.query(Material)
     materiales = q.all()
     result = [_material_to_out(m) for m in materiales]
@@ -29,6 +37,10 @@ def listar_materiales(
 
 @router.get("/resumen")
 def resumen_inventario(db: Session = Depends(get_db)):
+    """
+    Obtiene un resumen cuantitativo del inventario actual, incluyendo el total
+    de insumos registrados y el listado de insumos que requieren reabastecimiento urgente.
+    """
     materiales = db.query(Material).all()
     criticos = [m for m in materiales if m.stock_actual <= m.stock_minimo]
     return {
@@ -40,6 +52,9 @@ def resumen_inventario(db: Session = Depends(get_db)):
 
 @router.get("/{material_id}", response_model=MaterialOut)
 def obtener_material(material_id: int, db: Session = Depends(get_db)):
+    """
+    Recupera la información detallada de un material específico utilizando su ID.
+    """
     m = db.query(Material).filter(Material.id == material_id).first()
     if not m:
         raise HTTPException(status_code=404, detail="Material no encontrado")
@@ -48,6 +63,9 @@ def obtener_material(material_id: int, db: Session = Depends(get_db)):
 
 @router.post("/", response_model=MaterialOut, status_code=201)
 def crear_material(data: MaterialCreate, db: Session = Depends(get_db)):
+    """
+    Registra un nuevo material o materia prima en el inventario.
+    """
     m = Material(**data.model_dump())
     db.add(m)
     db.commit()
@@ -57,6 +75,9 @@ def crear_material(data: MaterialCreate, db: Session = Depends(get_db)):
 
 @router.put("/{material_id}", response_model=MaterialOut)
 def actualizar_material(material_id: int, data: MaterialUpdate, db: Session = Depends(get_db)):
+    """
+    Actualiza parcialmente las propiedades de un material (como precio, proveedor o stock mínimo).
+    """
     m = db.query(Material).filter(Material.id == material_id).first()
     if not m:
         raise HTTPException(status_code=404, detail="Material no encontrado")
@@ -69,7 +90,11 @@ def actualizar_material(material_id: int, data: MaterialUpdate, db: Session = De
 
 @router.patch("/{material_id}/stock")
 def ajustar_stock(material_id: int, cantidad: float, db: Session = Depends(get_db)):
-    """Incrementa o reduce el stock (usa negativo para reducir)."""
+    """
+    Incrementa o reduce el stock físico de un insumo de forma directa.
+    El parámetro 'cantidad' puede ser positivo (entrada al almacén) o negativo (salida/consumo).
+    El stock final está topado a un mínimo de 0.
+    """
     m = db.query(Material).filter(Material.id == material_id).first()
     if not m:
         raise HTTPException(status_code=404, detail="Material no encontrado")
@@ -81,6 +106,9 @@ def ajustar_stock(material_id: int, cantidad: float, db: Session = Depends(get_d
 
 @router.delete("/{material_id}", status_code=204)
 def eliminar_material(material_id: int, db: Session = Depends(get_db)):
+    """
+    Elimina permanentemente un material del inventario de la base de datos.
+    """
     m = db.query(Material).filter(Material.id == material_id).first()
     if not m:
         raise HTTPException(status_code=404, detail="Material no encontrado")

@@ -14,12 +14,19 @@ MESES_ES = ["Ene", "Feb", "Mar", "Abr", "May", "Jun",
 
 
 def _generar_codigo(db: Session) -> str:
+    """
+    Función auxiliar interna para generar códigos secuenciales de pedidos.
+    Busca el último ID registrado y genera un formato de tipo 'PED-1001', 'PED-1002', etc.
+    """
     ultimo = db.query(Pedido).order_by(Pedido.id.desc()).first()
     num = (ultimo.id + 1000 + 1) if ultimo else 1001
     return f"PED-{num}"
 
 
 def _pedido_to_out(p: Pedido) -> PedidoOut:
+    """
+    Convierte el modelo de Pedido de base de datos a su esquema estructurado de salida PedidoOut.
+    """
     return PedidoOut(
         id=p.id,
         codigo=p.codigo,
@@ -38,7 +45,11 @@ def _pedido_to_out(p: Pedido) -> PedidoOut:
 
 
 def _actualizar_resumen_mensual(db: Session, fecha: datetime):
-    """Recalcula el resumen del mes/año de una fecha dada."""
+    """
+    Recalcula los totales acumulados (total de pedidos y sumatoria de montos) del mes y año
+    especificados por la fecha provista. Actualiza el registro de VentaMensual para
+    mantener actualizados los datos del modelo de regresión lineal.
+    """
     anio = fecha.year
     mes = fecha.month
     total_pedidos = (
@@ -78,6 +89,11 @@ def listar_pedidos(
     limit: int = 100,
     db: Session = Depends(get_db),
 ):
+    """
+    Recupera el listado de pedidos registrados.
+    Permite filtrar opcionalmente por estado del pedido, tipo de cortina, cliente y paginación.
+    Las órdenes se ordenan cronológicamente descendentes (de las más nuevas a las más antiguas).
+    """
     q = db.query(Pedido)
     if estado:
         q = q.filter(Pedido.estado == estado)
@@ -91,7 +107,10 @@ def listar_pedidos(
 
 @router.get("/resumen-mensual")
 def resumen_mensual(db: Session = Depends(get_db)):
-    """Devuelve ventas agrupadas por mes para los gráficos."""
+    """
+    Obtiene las estadísticas de ventas agrupadas mensualmente.
+    Se utiliza para poblar el gráfico de facturación y volumen en el dashboard.
+    """
     rows = db.query(VentaMensual).order_by(VentaMensual.anio, VentaMensual.mes).all()
     return [
         {
@@ -107,7 +126,10 @@ def resumen_mensual(db: Session = Depends(get_db)):
 
 @router.get("/cantidad-por-tipo")
 def cantidad_por_tipo(db: Session = Depends(get_db)):
-    """Ventas por mes y tipo de cortina."""
+    """
+    Agrupa el volumen de cortinas vendidas por mes/año y lo desglosa por modelo de cortina.
+    Pivotado dinámicamente en un formato JSON listo para el gráfico comparativo del frontend.
+    """
     rows = (
         db.query(
             extract("year", Pedido.fecha_pedido).label("anio"),
@@ -138,6 +160,9 @@ def cantidad_por_tipo(db: Session = Depends(get_db)):
 
 @router.get("/{pedido_id}", response_model=PedidoOut)
 def obtener_pedido(pedido_id: int, db: Session = Depends(get_db)):
+    """
+    Obtiene los detalles de un pedido específico por su ID.
+    """
     p = db.query(Pedido).filter(Pedido.id == pedido_id).first()
     if not p:
         raise HTTPException(status_code=404, detail="Pedido no encontrado")
@@ -146,6 +171,12 @@ def obtener_pedido(pedido_id: int, db: Session = Depends(get_db)):
 
 @router.post("/", response_model=PedidoOut, status_code=201)
 def crear_pedido(data: PedidoCreate, db: Session = Depends(get_db)):
+    """
+    Crea un nuevo pedido en el sistema.
+    Calcula automáticamente el total financiero, asigna un código secuencial único,
+    inicializa el flujo de seguimiento del pedido en el taller (Producción)
+    y recalcula las ventas del mes en la tabla resumen.
+    """
     cliente = db.query(Cliente).filter(Cliente.id == data.cliente_id).first()
     if not cliente:
         raise HTTPException(status_code=404, detail="Cliente no encontrado")
@@ -160,7 +191,7 @@ def crear_pedido(data: PedidoCreate, db: Session = Depends(get_db)):
     db.flush()
     pedido.codigo = _generar_codigo(db)
 
-    # Crear registro de producción automáticamente
+    # Crear registro de producción automáticamente para que aparezca en el taller
     produccion = Produccion(pedido_id=pedido.id, estado="En proceso")
     db.add(produccion)
 
@@ -173,6 +204,11 @@ def crear_pedido(data: PedidoCreate, db: Session = Depends(get_db)):
 
 @router.put("/{pedido_id}", response_model=PedidoOut)
 def actualizar_pedido(pedido_id: int, data: PedidoUpdate, db: Session = Depends(get_db)):
+    """
+    Actualiza los datos de un pedido existente.
+    Recalcula el total financiero si cambia la cantidad o el precio unitario,
+    y refresca el resumen mensual de ventas.
+    """
     p = db.query(Pedido).filter(Pedido.id == pedido_id).first()
     if not p:
         raise HTTPException(status_code=404, detail="Pedido no encontrado")
@@ -188,6 +224,9 @@ def actualizar_pedido(pedido_id: int, data: PedidoUpdate, db: Session = Depends(
 
 @router.delete("/{pedido_id}", status_code=204)
 def eliminar_pedido(pedido_id: int, db: Session = Depends(get_db)):
+    """
+    Elimina permanentemente un pedido del sistema.
+    """
     p = db.query(Pedido).filter(Pedido.id == pedido_id).first()
     if not p:
         raise HTTPException(status_code=404, detail="Pedido no encontrado")

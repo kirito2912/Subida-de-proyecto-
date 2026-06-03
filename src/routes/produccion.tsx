@@ -5,11 +5,13 @@ import { PageHeader } from "@/components/PageHeader";
 import { Separator } from "@/components/ui/separator";
 import { Factory, User, Calendar, ClipboardList, CheckCircle2, Flame } from "lucide-react";
 
+// Configura la definición de la ruta de la aplicación para el módulo de Producción
 export const Route = createFileRoute("/produccion")({
   component: ProduccionPage,
   head: () => ({ meta: [{ title: "Producción — CortinaSys" }] }),
 });
 
+// Datos estáticos simulados de órdenes de producción activas e históricas para renderizado inicial
 const ordenesProduccionData = [
   {
     id: 1,
@@ -57,6 +59,12 @@ const ordenesProduccionData = [
   }
 ];
 
+/**
+ * Componente de página ProduccionPage
+ * Renderiza el listado visual de órdenes en planta con información detallada de ensamble.
+ * Muestra el estado del pedido en el taller, cantidad de unidades solicitadas, operario asignado,
+ * fecha de inicio del proceso y comentarios u observaciones técnicas de confección.
+ */
 function ProduccionPage() {
   return (
     <div className="space-y-6">

@@ -9,6 +9,10 @@ router = APIRouter(prefix="/quejas", tags=["Quejas"])
 
 
 def _queja_to_out(q: Queja) -> QuejaOut:
+    """
+    Función auxiliar para transformar un modelo Queja de base de datos
+    al esquema estructurado de salida QuejaOut, resolviendo la relación del cliente.
+    """
     return QuejaOut(
         id=q.id,
         cliente_id=q.cliente_id,
@@ -28,6 +32,11 @@ def listar_quejas(
     tipo: Optional[str] = None,
     db: Session = Depends(get_db),
 ):
+    """
+    Retorna la lista de quejas de clientes, con soporte opcional para filtrar
+    por estado (Abierta, En revisión, Resuelta) y tipo (Calidad, Entrega, Atención, Otro).
+    Ordenado cronológicamente de la más reciente a la más antigua.
+    """
     q = db.query(Queja)
     if estado:
         q = q.filter(Queja.estado == estado)
@@ -38,6 +47,9 @@ def listar_quejas(
 
 @router.get("/{queja_id}", response_model=QuejaOut)
 def obtener_queja(queja_id: int, db: Session = Depends(get_db)):
+    """
+    Obtiene los detalles completos de una queja específica a partir de su ID.
+    """
     q = db.query(Queja).filter(Queja.id == queja_id).first()
     if not q:
         raise HTTPException(status_code=404, detail="Queja no encontrada")
@@ -46,6 +58,10 @@ def obtener_queja(queja_id: int, db: Session = Depends(get_db)):
 
 @router.post("/", response_model=QuejaOut, status_code=201)
 def crear_queja(data: QuejaCreate, db: Session = Depends(get_db)):
+    """
+    Registra una nueva queja o incidencia en el sistema.
+    Si se suministra cliente_id, valida primero que el cliente exista en la base de datos.
+    """
     if data.cliente_id:
         c = db.query(Cliente).filter(Cliente.id == data.cliente_id).first()
         if not c:
@@ -59,6 +75,9 @@ def crear_queja(data: QuejaCreate, db: Session = Depends(get_db)):
 
 @router.put("/{queja_id}", response_model=QuejaOut)
 def actualizar_queja(queja_id: int, data: QuejaUpdate, db: Session = Depends(get_db)):
+    """
+    Actualiza el estado, tipo o añade una resolución técnica a una queja registrada.
+    """
     q = db.query(Queja).filter(Queja.id == queja_id).first()
     if not q:
         raise HTTPException(status_code=404, detail="Queja no encontrada")
@@ -71,6 +90,9 @@ def actualizar_queja(queja_id: int, data: QuejaUpdate, db: Session = Depends(get
 
 @router.delete("/{queja_id}", status_code=204)
 def eliminar_queja(queja_id: int, db: Session = Depends(get_db)):
+    """
+    Elimina permanentemente una queja a partir de su ID.
+    """
     q = db.query(Queja).filter(Queja.id == queja_id).first()
     if not q:
         raise HTTPException(status_code=404, detail="Queja no encontrada")

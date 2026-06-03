@@ -10,6 +10,10 @@ router = APIRouter(prefix="/clientes", tags=["Clientes"])
 
 
 def _generar_codigo(db: Session) -> str:
+    """
+    Función auxiliar interna para generar códigos secuenciales de cliente.
+    Busca el último ID registrado y genera un formato de tipo 'C-001', 'C-002', etc.
+    """
     ultimo = db.query(Cliente).order_by(Cliente.id.desc()).first()
     num = (ultimo.id + 1) if ultimo else 1
     return f"C-{num:03d}"
@@ -23,6 +27,11 @@ def listar_clientes(
     limit: int = 100,
     db: Session = Depends(get_db),
 ):
+    """
+    Lista todos los clientes registrados con soporte para filtros de búsqueda
+    por nombre, tipo de cliente (Particular, Mayorista, Corporativo) y paginación.
+    Calcula dinámicamente el total de pedidos y monto facturado por cliente.
+    """
     query = db.query(Cliente)
     if q:
         query = query.filter(Cliente.nombre.ilike(f"%{q}%"))
@@ -43,6 +52,11 @@ def listar_clientes(
 
 @router.get("/{cliente_id}", response_model=ClienteOut)
 def obtener_cliente(cliente_id: int, db: Session = Depends(get_db)):
+    """
+    Obtiene un cliente específico a partir de su ID de base de datos.
+    Calcula también estadísticas de compra acumuladas del cliente.
+    Retorna 404 si el cliente no existe.
+    """
     c = db.query(Cliente).filter(Cliente.id == cliente_id).first()
     if not c:
         raise HTTPException(status_code=404, detail="Cliente no encontrado")
@@ -56,6 +70,10 @@ def obtener_cliente(cliente_id: int, db: Session = Depends(get_db)):
 
 @router.post("/", response_model=ClienteOut, status_code=201)
 def crear_cliente(data: ClienteCreate, db: Session = Depends(get_db)):
+    """
+    Crea un nuevo registro de cliente en el sistema.
+    Autogenera un código único secuencial (e.g. C-001) para facilitar su identificación.
+    """
     c = Cliente(**data.model_dump())
     db.add(c)
     db.flush()
@@ -70,6 +88,10 @@ def crear_cliente(data: ClienteCreate, db: Session = Depends(get_db)):
 
 @router.put("/{cliente_id}", response_model=ClienteOut)
 def actualizar_cliente(cliente_id: int, data: ClienteUpdate, db: Session = Depends(get_db)):
+    """
+    Actualiza la información de un cliente a partir de su ID.
+    Permite actualizaciones parciales excluyendo campos no suministrados.
+    """
     c = db.query(Cliente).filter(Cliente.id == cliente_id).first()
     if not c:
         raise HTTPException(status_code=404, detail="Cliente no encontrado")
@@ -82,6 +104,9 @@ def actualizar_cliente(cliente_id: int, data: ClienteUpdate, db: Session = Depen
 
 @router.delete("/{cliente_id}", status_code=204)
 def eliminar_cliente(cliente_id: int, db: Session = Depends(get_db)):
+    """
+    Elimina permanentemente un cliente del sistema a partir de su ID.
+    """
     c = db.query(Cliente).filter(Cliente.id == cliente_id).first()
     if not c:
         raise HTTPException(status_code=404, detail="Cliente no encontrado")

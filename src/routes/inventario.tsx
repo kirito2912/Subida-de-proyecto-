@@ -13,11 +13,18 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 
+// Configura la ruta de TanStack Router para /inventario
 export const Route = createFileRoute("/inventario")({
   component: InventarioPage,
   head: () => ({ meta: [{ title: "Inventario — CortinaSys" }] }),
 });
 
+/**
+ * Componente principal InventarioPage
+ * Ofrece la interfaz para visualizar los niveles de existencias de materiales,
+ * registrar insumos entrantes, editar umbrales de stock mínimo, ajustar stock físico
+ * y listar sugerencias de reposición para materiales bajo alerta de stock crítico.
+ */
 function InventarioPage() {
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
@@ -34,11 +41,13 @@ function InventarioPage() {
     precio_unitario: 0
   });
 
+  // Consulta asíncrona de React Query para obtener todos los materiales e insumos
   const { data: inventarioData = [], isLoading } = useQuery({
     queryKey: ["inventario", filterQuery],
     queryFn: () => inventarioApi.listar(), 
   });
 
+  // Mutación para borrar permanentemente un material del inventario
   const deleteMutation = useMutation({
     mutationFn: (id: number) => api.delete(`/inventario/${id}`),
     onSuccess: () => {
@@ -48,6 +57,7 @@ function InventarioPage() {
     onError: () => toast.error("Error al eliminar el insumo")
   });
 
+  // Mutación para guardar modificaciones de un material existente
   const updateMutation = useMutation({
     mutationFn: (data: any) => api.put(`/inventario/${data.id}`, data),
     onSuccess: () => {
@@ -58,22 +68,26 @@ function InventarioPage() {
     onError: () => toast.error("Error al actualizar el insumo")
   });
 
+  // Carga el material en el formulario y abre el modal dialog de edición
   const handleEdit = (material: any) => {
     setEditingMaterial({ ...material });
     setIsEditDialogOpen(true);
   };
 
+  // Solicita confirmación y ejecuta el borrado físico de un material
   const handleDelete = (id: number) => {
     if (confirm("¿Estás seguro de que deseas eliminar este insumo del almacén?")) {
       deleteMutation.mutate(id);
     }
   };
 
+  // Manejador del submit del formulario de actualización
   const handleUpdate = (e: React.FormEvent) => {
     e.preventDefault();
     updateMutation.mutate(editingMaterial);
   };
 
+  // Filtra localmente los materiales por nombre o proveedor utilizando filterQuery
   const filteredData = Array.isArray(inventarioData) ? inventarioData.filter((m: any) => {
     const nombre = (m?.nombre || "").toLowerCase();
     const proveedor = (m?.proveedor || "").toLowerCase();
@@ -81,10 +95,12 @@ function InventarioPage() {
     return nombre.includes(query) || proveedor.includes(query);
   }) : [];
 
+  // Actualiza la variable filterQuery para disparar el filtro reactivo
   const handleSearch = () => {
     setFilterQuery(searchTerm);
   };
 
+  // Mutación para registrar un nuevo material/insumo en el almacén central
   const mutation = useMutation({
     mutationFn: (data: any) => api.post("/inventario/", data),
     onSuccess: () => {
@@ -105,11 +121,13 @@ function InventarioPage() {
     }
   });
 
+  // Manejador del submit del formulario de creación
   const handleAddProduct = (e: React.FormEvent) => {
     e.preventDefault();
     mutation.mutate(nuevoMaterial);
   };
 
+  // Cálculos estadísticos rápidos sobre el inventario actual
   const totalInsumos = Array.isArray(inventarioData) ? inventarioData.length : 0;
   const alertasCriticas = Array.isArray(inventarioData) ? inventarioData.filter((m: any) => m.stock_actual <= m.stock_minimo).length : 0;
   const lotesEstables = totalInsumos - alertasCriticas;

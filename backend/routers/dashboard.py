@@ -10,6 +10,16 @@ router = APIRouter(prefix="/dashboard", tags=["Dashboard"])
 
 @router.get("/kpis")
 def kpis(db: Session = Depends(get_db)):
+    """
+    Obtiene las estadísticas e indicadores clave de rendimiento (KPIs) globales para la pantalla principal.
+    Calcula:
+    1. Cantidad de ventas/pedidos del mes actual (excluyendo cancelados).
+    2. Sumatoria total facturada en el mes actual (excluyendo cancelados).
+    3. Cantidad de pedidos en proceso de ensamble en el taller.
+    4. Cantidad de materiales con existencias por debajo del stock mínimo configurado.
+    5. Clientes únicos activos con compras durante el mes actual.
+    6. Variación porcentual de volumen de ventas respecto al mes anterior.
+    """
     hoy = date.today()
 
     ventas_mes = (
@@ -50,7 +60,7 @@ def kpis(db: Session = Depends(get_db)):
         .scalar() or 0
     )
 
-    # Variación vs mes anterior
+    # Variación vs mes anterior para analizar tendencias de crecimiento
     mes_anterior = hoy.month - 1 or 12
     anio_anterior = hoy.year if hoy.month > 1 else hoy.year - 1
     ventas_anterior = (
@@ -60,7 +70,7 @@ def kpis(db: Session = Depends(get_db)):
             extract("month", Pedido.fecha_pedido) == mes_anterior,
             Pedido.estado != "Cancelado",
         )
-        .scalar() or 1  # evitar /0
+        .scalar() or 1  # evitar /0 en el cálculo de división
     )
     variacion_ventas = round((ventas_mes - ventas_anterior) / ventas_anterior * 100, 1)
 

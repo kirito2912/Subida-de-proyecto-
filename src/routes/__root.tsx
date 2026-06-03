@@ -10,21 +10,26 @@ import {
 
 import appCss from "../styles.css?url";
 
+/**
+ * Componente NotFoundComponent
+ * Se renderiza cuando el usuario accede a una ruta inexistente.
+ * Muestra un aviso de error 404 amigable en español.
+ */
 function NotFoundComponent() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
       <div className="max-w-md text-center">
         <h1 className="text-7xl font-bold text-foreground">404</h1>
-        <h2 className="mt-4 text-xl font-semibold text-foreground">Page not found</h2>
+        <h2 className="mt-4 text-xl font-semibold text-foreground">Página no encontrada</h2>
         <p className="mt-2 text-sm text-muted-foreground">
-          The page you're looking for doesn't exist or has been moved.
+          La página que buscas no existe o ha sido movida.
         </p>
         <div className="mt-6">
           <Link
             to="/"
             className="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
           >
-            Go home
+            Ir al inicio
           </Link>
         </div>
       </div>
@@ -32,6 +37,11 @@ function NotFoundComponent() {
   );
 }
 
+/**
+ * Componente ErrorComponent
+ * Renderizado de forma aislada en caso de un fallo en tiempo de ejecución (runtime crash)
+ * en alguna de las páginas hijas, ofreciendo la opción de reintentar la acción o volver al inicio.
+ */
 function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
   console.error(error);
   const router = useRouter();
@@ -40,10 +50,10 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
       <div className="max-w-md text-center">
         <h1 className="text-xl font-semibold tracking-tight text-foreground">
-          This page didn't load
+          Esta página no se cargó
         </h1>
         <p className="mt-2 text-sm text-muted-foreground">
-          Something went wrong on our end. You can try refreshing or head back home.
+          Algo salió mal por nuestra parte. Puedes intentar recargar la página o volver al inicio.
         </p>
         <div className="mt-6 flex flex-wrap justify-center gap-2">
           <button
@@ -53,13 +63,13 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
             }}
             className="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
           >
-            Try again
+            Intentar de nuevo
           </button>
           <a
             href="/"
             className="inline-flex items-center justify-center rounded-md border border-input bg-background px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-accent"
           >
-            Go home
+            Ir al inicio
           </a>
         </div>
       </div>
@@ -67,19 +77,20 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
   );
 }
 
+// Configuración global de la ruta raíz (Root Route).
+// Asocia metadatos SEO principales, estilos globales y los componentes estructurales (Shell, Component, NotFound, Error).
 export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()({
   head: () => ({
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Lovable App" },
-      { name: "description", content: "Lovable Generated Project" },
-      { name: "author", content: "Lovable" },
-      { property: "og:title", content: "Lovable App" },
-      { property: "og:description", content: "Lovable Generated Project" },
+      { title: "CortinaSys - Sistema de Ventas y Predicción" },
+      { name: "description", content: "Sistema inteligente para la gestión de ventas, producción y predicción de demanda de cortinas." },
+      { name: "author", content: "CortinaSys" },
+      { property: "og:title", content: "CortinaSys App" },
+      { property: "og:description", content: "Gestión y predicción de demanda de cortinas." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
-      { name: "twitter:site", content: "@Lovable" },
     ],
     links: [
       {
@@ -94,9 +105,14 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
   errorComponent: ErrorComponent,
 });
 
+/**
+ * Componente RootShell
+ * Cascarón de HTML inicial renderizado únicamente en el lado del servidor (SSR)
+ * para inyectar cabeceras head de TanStack y scripts de hidratación del cliente.
+ */
 function RootShell({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="es">
       <head>
         <HeadContent />
       </head>
@@ -111,6 +127,12 @@ function RootShell({ children }: { children: React.ReactNode }) {
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
 
+/**
+ * Componente RootComponent
+ * Renderiza la interfaz principal compartida por la aplicación tras la hidratación en el cliente.
+ * Envuelve la aplicación con los proveedores de React Query (estado asíncrono) y Sidebar (menú lateral),
+ * estructurando el encabezado adhesivo y el contenedor dinámico para la navegación interna (<Outlet />).
+ */
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
 
@@ -136,3 +158,4 @@ function RootComponent() {
     </QueryClientProvider>
   );
 }
+

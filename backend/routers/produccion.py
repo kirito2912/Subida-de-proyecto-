@@ -10,6 +10,11 @@ router = APIRouter(prefix="/produccion", tags=["Producción"])
 
 
 def _prod_to_out(p: Produccion) -> ProduccionOut:
+    """
+    Función auxiliar para mapear el modelo de base de datos Produccion
+    al esquema de salida ProduccionOut, resolviendo datos anidados como
+    los detalles del cliente, pedido y tipo de cortina.
+    """
     return ProduccionOut(
         id=p.id,
         pedido_id=p.pedido_id,
@@ -30,6 +35,10 @@ def listar_produccion(
     estado: Optional[str] = Query(None, description="En proceso | Entregado"),
     db: Session = Depends(get_db),
 ):
+    """
+    Obtiene la lista de órdenes registradas en el taller de producción.
+    Permite filtrar opcionalmente por estado ('En proceso' o 'Entregado').
+    """
     q = db.query(Produccion)
     if estado:
         q = q.filter(Produccion.estado == estado)
@@ -39,7 +48,11 @@ def listar_produccion(
 
 @router.get("/resumen-semanal")
 def resumen_semanal(db: Session = Depends(get_db)):
-    """Agrupa producción por semana del mes actual para el gráfico."""
+    """
+    Agrupa los registros de producción del mes actual por semana natural del año
+    y clasifica el volumen acumulado según el estado.
+    Útil para renderizar el gráfico del flujo del taller.
+    """
     from sqlalchemy import extract, func
     from datetime import date
 
@@ -73,6 +86,9 @@ def resumen_semanal(db: Session = Depends(get_db)):
 
 @router.get("/{produccion_id}", response_model=ProduccionOut)
 def obtener_produccion(produccion_id: int, db: Session = Depends(get_db)):
+    """
+    Obtiene un registro de producción individual a partir de su ID.
+    """
     p = db.query(Produccion).filter(Produccion.id == produccion_id).first()
     if not p:
         raise HTTPException(status_code=404, detail="Registro de producción no encontrado")
@@ -81,6 +97,11 @@ def obtener_produccion(produccion_id: int, db: Session = Depends(get_db)):
 
 @router.put("/{produccion_id}", response_model=ProduccionOut)
 def actualizar_produccion(produccion_id: int, data: ProduccionUpdate, db: Session = Depends(get_db)):
+    """
+    Actualiza los metadatos de producción (e.g. asignar operario, registrar notas o cambiar estado).
+    Si se marca la producción como 'Entregado', se establece automáticamente la fecha de fin
+    y se sincroniza el estado de la orden (Pedido) a 'Entregado' con su fecha de entrega correspondiente.
+    """
     p = db.query(Produccion).filter(Produccion.id == produccion_id).first()
     if not p:
         raise HTTPException(status_code=404, detail="Registro de producción no encontrado")

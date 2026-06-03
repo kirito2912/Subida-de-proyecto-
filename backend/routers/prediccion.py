@@ -9,12 +9,17 @@ from schemas import PrediccionOut
 
 router = APIRouter(prefix="/prediccion", tags=["Predicción"])
 
+# Lista de nombres de meses en español para formato de salida amigable
 MESES_ES = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
             "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"]
 
 
 def _regresion_lineal(x: list, y: list):
-    """Regresión lineal simple sin dependencia de sklearn."""
+    """
+    Realiza una regresión lineal simple sin dependencias externas como scikit-learn.
+    Retorna la pendiente 'm', la ordenada al origen 'b' y el coeficiente de determinación 'R²'.
+    Esto se utiliza para calcular las tendencias estadísticas de ventas basándose en los índices de tiempo.
+    """
     n = len(x)
     if n < 2:
         media_y = sum(y) / n if n else 0
@@ -32,7 +37,7 @@ def _regresion_lineal(x: list, y: list):
     m = (n * sum_xy - sum_x * sum_y) / denom
     b = (sum_y - m * sum_x) / n
 
-    # Calcular R²
+    # Calcular R² para conocer el porcentaje de ajuste del modelo
     y_mean = sum_y / n
     ss_res = sum((yi - (m * xi + b)) ** 2 for xi, yi in zip(x, y))
     ss_tot = sum((yi - y_mean) ** 2 for yi in y)
@@ -42,6 +47,10 @@ def _regresion_lineal(x: list, y: list):
 
 
 def _calcular_error_std(x: list, y: list, m: float, b: float) -> float:
+    """
+    Calcula la desviación estándar de los residuos (error estándar de la estimación).
+    Se utiliza para determinar el margen de error y construir los límites superior e inferior de confianza.
+    """
     if len(y) < 2:
         return max(y) * 0.1 if y else 10
     residuos = [(yi - (m * xi + b)) ** 2 for xi, yi in zip(x, y)]
@@ -54,13 +63,14 @@ def predecir_ventas(
     db: Session = Depends(get_db),
 ):
     """
-    Predice la cantidad de pedidos usando regresión lineal simple sobre
-    el historial de ventas mensuales almacenado en la tabla ventas_mensuales.
+    Predice la cantidad de pedidos de cortinas usando regresión lineal simple sobre
+    el histórico de ventas mensuales almacenado en la base de datos.
+    Calcula los límites superior e inferior de confianza usando un intervalo del 95% (Z = 1.96).
     """
     historial = db.query(VentaMensual).order_by(VentaMensual.anio, VentaMensual.mes).all()
 
     if len(historial) < 2:
-        # Sin datos suficientes, devolver estimados base
+        # Si no hay suficientes datos históricos, devolver estimados base razonables
         from datetime import date
         hoy = date.today()
         resultado = []
@@ -78,14 +88,13 @@ def predecir_ventas(
             ))
         return resultado
 
-    # Índices secuenciales para el modelo
+    # Genera índices de tiempo secuenciales (0, 1, 2...) y la variable objetivo
     x = list(range(len(historial)))
     y = [h.total_pedidos for h in historial]
 
     m, b, r2 = _regresion_lineal(x, y)
     error_std = _calcular_error_std(x, y, m, b)
 
-    # Determinar el mes/año de inicio de predicción
     ultimo = historial[-1]
     resultado = []
 
@@ -93,12 +102,13 @@ def predecir_ventas(
         x_pred = len(historial) - 1 + i
         valor = m * x_pred + b
 
-        # Calcular mes y año destino
+        # Calcula el mes y el año correspondiente a la proyección
         mes_offset = ultimo.mes + i
         anio_pred = ultimo.anio + (mes_offset - 1) // 12
         mes_pred = (mes_offset - 1) % 12 + 1
 
-        intervalo = 1.96 * error_std  # 95% de confianza
+        # Multiplicador 1.96 para margen de error con 95% de confianza estadística
+        intervalo = 1.96 * error_std
         resultado.append(PrediccionOut(
             mes=MESES_ES[mes_pred - 1],
             mes_numero=mes_pred,
@@ -115,8 +125,8 @@ def predecir_ventas(
 @router.get("/historico")
 def historico_con_prediccion(db: Session = Depends(get_db)):
     """
-    Devuelve el histórico real + la línea de tendencia ajustada,
-    útil para el gráfico 'Ventas vs Predicción' del dashboard.
+    Retorna el histórico real de ventas mensuales junto con la línea de tendencia calculada por el modelo.
+    Es utilizado directamente por los gráficos dinámicos del frontend para contrastar datos reales vs estimados.
     """
     historial = db.query(VentaMensual).order_by(VentaMensual.anio, VentaMensual.mes).all()
     if not historial:
@@ -145,8 +155,9 @@ def historico_con_prediccion(db: Session = Depends(get_db)):
 @router.post("/upload-excel")
 async def upload_excel_data(file: UploadFile = File(...), db: Session = Depends(get_db)):
     """
-    Recibe un archivo Excel generado por el frontend con columnas: anio, mes, total_pedidos.
-    Actualiza la tabla VentaMensual para reentrenar el modelo.
+    Recibe un archivo Excel desde el frontend con columnas 'anio', 'mes', y 'total_pedidos'.
+    Reemplaza el historial actual en base de datos con los datos del Excel para reentrenar
+    el modelo de regresión lineal. Calcula el RMSE simple en el proceso.
     """
     if not file.filename.endswith(('.xlsx', '.xls')):
         raise HTTPException(status_code=400, detail="El archivo debe ser un Excel (.xlsx o .xls)")
@@ -159,8 +170,7 @@ async def upload_excel_data(file: UploadFile = File(...), db: Session = Depends(
         if not required_cols.issubset(df.columns):
             raise HTTPException(status_code=400, detail=f"El Excel debe contener las columnas: {required_cols}")
 
-        # Limpiar datos previos (opcional, dependiendo de si quieres acumular o reemplazar)
-        # Para este caso, vamos a reemplazar los datos para asegurar que el modelo se reentrena con el nuevo dataset
+        # Limpiamos los datos históricos existentes antes de importar
         db.query(VentaMensual).delete()
 
         for _, row in df.iterrows():
@@ -173,12 +183,12 @@ async def upload_excel_data(file: UploadFile = File(...), db: Session = Depends(
         
         db.commit()
 
-        # Calcular métricas básicas para devolver al frontend
+        # Cálculo de métricas básicas de validación del set importado (Simulando split 80/20)
         total_registros = len(df)
         muestras_entrenamiento = int(total_registros * 0.8)
         muestras_test = total_registros - muestras_entrenamiento
         
-        # Calcular RMSE simple sobre todo el set para mostrar algo de precisión
+        # Calcular el error cuadrático medio (RMSE) simple
         rmse = 0.0
         if total_registros >= 2:
             x = list(range(total_registros))
@@ -206,7 +216,10 @@ async def upload_excel_data(file: UploadFile = File(...), db: Session = Depends(
 
 @router.delete("/limpiar")
 def limpiar_historial(db: Session = Depends(get_db)):
-    """Borra todos los datos históricos de ventas mensuales."""
+    """
+    Elimina permanentemente todo el historial de ventas mensuales almacenado.
+    Esto reinicia el modelo de regresión lineal.
+    """
     try:
         db.query(VentaMensual).delete()
         db.commit()
@@ -214,3 +227,4 @@ def limpiar_historial(db: Session = Depends(get_db)):
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
+

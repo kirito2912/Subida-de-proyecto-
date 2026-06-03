@@ -14,15 +14,26 @@ import { useState } from "react";
 import api, { clientes as clientesApi, ventas as ventasApi } from "@/lib/api";
 import { toast } from "sonner";
 
+// Definición de la ruta de TanStack Router para /clientes
 export const Route = createFileRoute("/clientes")({
   component: ClientesPage,
   head: () => ({ meta: [{ title: "Clientes — CortinaSys" }] }),
 });
 
+/**
+ * Función utilitaria tipoColor
+ * Retorna las clases de Tailwind de badge según la categoría o perfil del cliente.
+ */
 function tipoColor(t: string) {
   return t === "Corporativo" ? "bg-chart-1/15 text-chart-1" : t === "Mayorista" ? "bg-chart-2/15 text-chart-2" : "bg-muted text-foreground";
 }
 
+/**
+ * Componente principal ClientesPage
+ * Gestiona el listado general de clientes registrados, permite crear registros nuevos
+ * a través de un panel lateral de formulario, editarlos en un modal dialog y eliminarlos,
+ * además de visualizar el historial de transacciones comerciales asociadas.
+ */
 function ClientesPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [filterQuery, setFilterQuery] = useState("");
@@ -31,11 +42,13 @@ function ClientesPage() {
   const [editingCliente, setEditingCliente] = useState<any>(null);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
 
+  // Consulta de React Query para obtener de forma asíncrona la lista filtrada de clientes
   const { data: clientes = [], isLoading } = useQuery({
     queryKey: ["clientes", filterQuery],
     queryFn: () => clientesApi.listar(filterQuery),
   });
 
+  // Mutación para borrar permanentemente un cliente en base de datos e invalidar la caché
   const deleteMutation = useMutation({
     mutationFn: (id: number) => api.delete(`/clientes/${id}`),
     onSuccess: () => {
@@ -45,6 +58,7 @@ function ClientesPage() {
     onError: () => toast.error("Error al eliminar el cliente")
   });
 
+  // Mutación para guardar las modificaciones aplicadas a un cliente
   const updateMutation = useMutation({
     mutationFn: (data: any) => api.put(`/clientes/${data.id}`, data),
     onSuccess: () => {
@@ -55,31 +69,37 @@ function ClientesPage() {
     onError: () => toast.error("Error al actualizar el cliente")
   });
 
+  // Abre el modal Dialog y precarga el cliente para su edición
   const handleEdit = (cliente: any) => {
     setEditingCliente({ ...cliente });
     setIsEditDialogOpen(true);
   };
 
+  // Solicita confirmación y ejecuta la mutación de borrado
   const handleDelete = (id: number) => {
     if (confirm("¿Estás seguro de que deseas eliminar este cliente?")) {
       deleteMutation.mutate(id);
     }
   };
 
+  // Manejador del submit de actualización
   const handleUpdate = (e: React.FormEvent) => {
     e.preventDefault();
     updateMutation.mutate(editingCliente);
   };
 
+  // Aplica el término de búsqueda al estado filterQuery de react-query
   const handleSearch = () => {
     setFilterQuery(searchTerm);
   };
 
+  // Consulta las órdenes generales de venta para renderizar el historial de transacciones
   const { data: historial = [] } = useQuery({
     queryKey: ["ventas"],
     queryFn: ventasApi.listar,
   });
 
+  // Mutación para la creación física de un nuevo cliente en base de datos
   const mutation = useMutation({
     mutationFn: clientesApi.crear,
     onSuccess: () => {
@@ -92,6 +112,7 @@ function ClientesPage() {
     }
   });
 
+  // Manejador del submit de inserción
   const handleCreate = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newCliente.nombre.trim()) return toast.error("El nombre es obligatorio");

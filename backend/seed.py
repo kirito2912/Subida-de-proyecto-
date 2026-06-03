@@ -8,9 +8,11 @@ import random
 from database import SessionLocal, engine, Base
 from models import Cliente, Pedido, Material, Produccion, VentaMensual, Queja
 
+# Asegura la creación de todas las tablas en la base de datos antes de semillar
 Base.metadata.create_all(bind=engine)
 db = SessionLocal()
 
+# Limpia cualquier registro previo para evitar duplicados y contar con una base limpia
 print("Limpiando base de datos...")
 db.query(Queja).delete()
 db.query(Produccion).delete()
@@ -21,6 +23,7 @@ db.query(VentaMensual).delete()
 db.commit()
 
 # ─── CLIENTES ─────────────────────────────────────────────────────────────────
+# Lista de clientes ficticios con diferentes categorías de mercado (Mayorista, Corporativo, Particular)
 print("Creando clientes...")
 clientes_data = [
     ("María González",    "Mayorista",    "+591 7012-3456", "maria@hogar.bo"),
@@ -42,13 +45,14 @@ db.commit()
 print(f"  - {len(clientes)} clientes creados")
 
 # ─── MATERIALES ───────────────────────────────────────────────────────────────
+# Insumos de producción iniciales con stock crítico configurado en base al stock_minimo
 print("Creando materiales...")
 materiales_data = [
     ("Tela Blackout",      420, 150, "metros",  45.0, "TextilPro S.A."),
     ("Tela Voile",         280, 100, "metros",  32.0, "TextilPro S.A."),
     ("Mecanismo Roller",    95,  80, "unidades",120.0, "MecanSur"),
     ("Tubo Aluminio",      340, 120, "metros",  18.5, "AlumBolivia"),
-    ("Cordón",              68,  90, "metros",   5.0, "TextilPro S.A."),  # crítico
+    ("Cordón",              68,  90, "metros",   5.0, "TextilPro S.A."),  # En stock crítico (68 < 90)
     ("Tela Romana",        195,  60, "metros",  55.0, "TextilPro S.A."),
     ("Lámina Veneciana",   240,  80, "metros",  28.0, "AlumBolivia"),
     ("Herrajes",           310, 100, "unidades", 12.0, "FerreMax"),
@@ -62,22 +66,23 @@ db.commit()
 print(f"  - {len(materiales_data)} materiales creados")
 
 # ─── PEDIDOS (últimos 8 meses) ────────────────────────────────────────────────
+# Genera pedidos simulados para poblar el histórico que utilizará la regresión lineal
 print("Creando pedidos históricos...")
 tipos = ["Blackout", "Roller", "Romana", "Panel", "Veneciana"]
 temporadas = ["Verano", "Otoño", "Invierno", "Primavera"]
 precios = {"Blackout": 1200, "Roller": 800, "Romana": 1250, "Panel": 1800, "Veneciana": 600}
 
-# Cantidades mensuales que coinciden con el frontend (ene-ago 2026)
+# Cantidades mensuales ficticias representativas de la demanda (ene-ago)
 ventas_por_mes = [145, 168, 192, 175, 210, 245, 268, 290]
 hoy = datetime.now()
 
 pedido_counter = 1001
 pedidos_creados = []
 
-for mes_offset in range(7, -1, -1):  # 8 meses atrás
+for mes_offset in range(7, -1, -1):  # Recorrer hacia atrás los últimos 8 meses
     fecha_mes = hoy - timedelta(days=mes_offset * 30)
     cantidad_mes = ventas_por_mes[7 - mes_offset]
-    num_pedidos = cantidad_mes // 8  # aprox pedidos individuales
+    num_pedidos = cantidad_mes // 8  # Subdividir el volumen mensual total en pedidos individuales
 
     for _ in range(num_pedidos):
         cliente = random.choice(clientes)
@@ -112,6 +117,7 @@ db.commit()
 print(f"  - {len(pedidos_creados)} pedidos creados")
 
 # ─── PRODUCCIÓN ───────────────────────────────────────────────────────────────
+# Asocia los pedidos creados a un operario y a un estado en el taller de producción
 print("Creando registros de producción...")
 operarios = ["Juan Quispe", "Pedro Mamani", "Rosa Flores", "Luis Condori"]
 for p in pedidos_creados:
@@ -128,6 +134,7 @@ db.commit()
 print(f"  - {len(pedidos_creados)} registros de producción")
 
 # ─── VENTAS MENSUALES (resumen) ────────────────────────────────────────────────
+# Calcula y almacena las sumatorias agrupadas por mes para la tabla de estadísticas
 print("Calculando resumen mensual...")
 from sqlalchemy import func, extract
 
@@ -136,6 +143,7 @@ for mes_offset in range(7, -1, -1):
     anio = fecha_mes.year
     mes = fecha_mes.month
 
+    # Suma la cantidad total de pedidos en el mes
     total_p = (
         db.query(func.count(Pedido.id))
         .filter(
@@ -145,6 +153,7 @@ for mes_offset in range(7, -1, -1):
         )
         .scalar() or 0
     )
+    # Suma el monto total facturado en el mes
     total_m = (
         db.query(func.sum(Pedido.total))
         .filter(
@@ -161,6 +170,7 @@ db.commit()
 print("  - Resumen mensual calculado")
 
 # ─── QUEJAS ───────────────────────────────────────────────────────────────────
+# Registra quejas de prueba para validar el módulo de atención al cliente
 print("Creando quejas de ejemplo...")
 quejas_data = [
     (clientes[1].id, "Demora en la entrega del pedido PED-1020", "Entrega", "Resuelta"),
